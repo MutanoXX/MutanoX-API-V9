@@ -1,0 +1,16 @@
+1403 |   if (!apiKey || !auth.valid) {
+         ^
+error: Expected ")" but found "if"
+    at /home/z/my-project/mutanox-consultas-Api/api.js:1403:3
+
+1403 |   if (!apiKey || !auth.valid) {
+                                     ^
+error: Expected ";" but found "{"
+    at /home/z/my-project/mutanox-consultas-Api/api.js:1403:31
+
+1408 |   }
+         ^
+error: Unexpected }
+    at /home/z/my-project/mutanox-consultas-Api/api.js:1408:3
+
+Bun v1.3.5 (Linux x64 baseline)

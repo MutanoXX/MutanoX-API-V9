@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Teste de Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        input, button {
+            padding: 12px;
+            margin: 5px 0;
+            width: 100%;
+            box-sizing: border-box;
+            background: #0f3460;
+            border: 1px solid #533483;
+            color: white;
+            border-radius: 4px;
+        }
+        button {
+            background: #10b981;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button:hover { background: #059669; }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #0f3460;
+            border-radius: 8px;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste Completo do Login</h1>
+
+    <input type="text" id="username" value="admin" placeholder="Usuário">
+    <input type="password" id="password" value="MutanoX3397" placeholder="Senha">
+    <button onclick="testCompleteLogin()">Testar Login Completo</button>
+
+    <div id="result"></div>
+
+    <div style="margin-top: 30px; padding: 15px; background: #16213e; border-radius: 8px;">
+        <h2>📋 Informações:</h2>
+        <p><strong>Dashboard:</strong> <a href="http://localhost:8080/admin" target="_blank" style="color: #10b981;">http://localhost:8080/admin</a></p>
+        <p><strong>Usuário:</strong> admin</p>
+        <p><strong>Senha:</strong> MutanoX3397</p>
+    </div>
+
+    <script>
+        async function testCompleteLogin() {
+            const resultDiv = document.getElementById('result');
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            resultDiv.innerHTML = '<p class="info">🔄 Testando login...</p>';
+
+            try {
+                // PASSO 1: Enviar para API
+                const response = await fetch('http://localhost:8080/api/admin/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                resultDiv.innerHTML = `
+                    <p class="info">📊 Status HTTP: ${response.status}</p>
+                `;
+
+                if (response.ok && data.success) {
+                    // PASSO 2: Salvar no localStorage (como o dashboard faz)
+                    localStorage.setItem('mutanox_admin_key', data.adminKey);
+                    localStorage.setItem('mutanox_admin_user', username);
+
+                    // PASSO 3: Verificar se salvou
+                    const savedKey = localStorage.getItem('mutanox_admin_key');
+                    const savedUser = localStorage.getItem('mutanox_admin_user');
+
+                    resultDiv.innerHTML += `
+                        <p class="success">✅ Login bem-sucedido!</p>
+                        <p>AdminKey: ${data.adminKey}</p>
+                        <p>Mensagem: ${data.message}</p>
+                        <hr style="margin: 10px 0; border-color: #30363d;">
+                        <p class="info">📦 localStorage:</p>
+                        <p>mutanox_admin_key: ${savedKey}</p>
+                        <p>mutanox_admin_user: ${savedUser}</p>
+                        <hr style="margin: 10px 0; border-color: #30363d;">
+                        <p class="success">🎉 Agora pode acessar o dashboard!</p>
+                        <p><a href="http://localhost:8080/admin" target="_blank" style="color: #10b981;">Abrir Dashboard</a></p>
+                    `;
+                } else {
+                    resultDiv.innerHTML += `
+                        <p class="error">❌ Login falhou!</p>
+                        <p>Status: ${response.status}</p>
+                        <p>Mensagem: ${data.message}</p>
+                    `;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `
+                    <p class="error">❌ Erro: ${e.message}</p>
+                    <p>Verifique se o servidor está rodando em http://localhost:8080</p>
+                `;
+            }
+        }
+
+        // Verificar se já está logado
+        window.onload = function() {
+            const savedKey = localStorage.getItem('mutanox_admin_key');
+            const resultDiv = document.getElementById('result');
+
+            if (savedKey) {
+                resultDiv.innerHTML = '<p class="success">✅ Você já está logado! (localStorage tem a chave)</p>';
+            }
+        };
+    </script>
+</body>
+</html>

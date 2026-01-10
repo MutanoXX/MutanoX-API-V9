@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MutanoX | Dashboard V9 Ultimate</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        :root {
+            --primary: #00f2ff;
+            --primary-glow: rgba(0, 242, 255, 0.3);
+            --secondary: #7000ff;
+            --bg-dark: #050507;
+            --card-bg: rgba(20, 20, 25, 0.8);
+            --text-main: #ffffff;
+            --text-muted: #8a8aa3;
+            --border: rgba(255, 255, 255, 0.06);
+            --success: #00ff9d;
+            --danger: #ff4d4d;
+            --warning: #ffcc00;
+        }
+
+        body.light-mode {
+            --bg-dark: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #1a1a1a;
+            --text-muted: #65676b;
+            --border: rgba(0, 0, 0, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-dark); color: var(--text-main); overflow: hidden; }
+
+        .dashboard-container { display: flex; height: 100vh; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            padding: 30px 20px;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            padding: 0 10px;
+        }
+
+        .logo i { font-size: 24px; color: var(--primary); }
+        .logo h1 { font-size: 20px; font-weight: 900; letter-spacing: 1px; }
+
+        .nav-menu { flex: 1; overflow-y: auto; }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            color: var(--text-muted);
+            text-decoration: none;
+            border-radius: 10px;
+            margin-bottom: 5px;
+            transition: 0.3s;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: rgba(0, 242, 255, 0.1);
+            color: var(--primary);
+        }
+
+        .nav-item i { font-size: 16px; width: 20px; }
+
+        .logout-btn {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 15px;
+            color: var(--danger);
+            text-decoration: none;
+            border-radius: 10px;
+            transition: 0.3s;
+            cursor: pointer;
+            font-weight: 600;
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px;
+            background: radial-gradient(circle at top right, rgba(112, 0, 255, 0.05), transparent);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .welcome h2 { font-size: 24px; margin-bottom: 5px; }
+        .welcome p { color: var(--text-muted); font-size: 14px; }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .stat-value { font-size: 22px; font-weight: 800; margin-bottom: 3px; }
+        .stat-label { color: var(--text-muted); font-size: 12px; }
+
+        /* Charts Section */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            margin-bottom: 20px;
+        }
+
+        .card-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+
+        /* Sections */
+        .content-section { display: none; animation: fadeIn 0.4s ease; }
+        .content-section.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px; color: var(--text-muted); font-size: 12px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+        td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+
+        .badge { padding: 4px 10px; border-radius: 15px; font-size: 10px; font-weight: 700; }
+        .badge-success { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+        .badge-danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+        .badge-warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+
+        /* Forms */
+        .form-group { margin-bottom: 15px; }
+        .input-label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 13px; }
+        .form-input {
+            width: 100%;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: white;
+            outline: none;
+            transition: 0.3s;
+        }
+        .form-input:focus { border-color: var(--primary); }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-primary { background: var(--primary); color: var(--bg-dark); }
+        .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-sm { padding: 6px 12px; font-size: 11px; }
+
+        /* Health Monitor */
+        .health-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .health-item { background: rgba(255,255,255,0.02); padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+        .health-status { font-weight: 800; font-size: 14px; margin-top: 5px; }
+
+        /* Modal */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-content { background: #0f0f1a; border: 1px solid var(--border); border-radius: 20px; padding: 30px; width: 100%; max-width: 500px; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px;"></div>
+    <div class="sidebar">
+            <div class="logo">
+                <i class="fas fa-bolt"></i>
+                <h1>MUTANOX V9</h1>
+            </div>
+            <div class="nav-menu">
+                <div class="nav-item active" onclick="showSection('overview')">
+                    <i class="fas fa-chart-line"></i> Overview
+                </div>
+                <div class="nav-item" onclick="showSection('keys')">
+                    <i class="fas fa-key"></i> API Keys & Cotas
+                </div>
+                <div class="nav-item" onclick="showSection('audit')">
+                    <i class="fas fa-history"></i> Auditoria (Logs)
+                </div>
+                <div class="nav-item" onclick="showSection('health')">
+                    <i class="fas fa-heartbeat"></i> Saúde das APIs
+                </div>
+                <div class="nav-item" onclick="showSection('protection')">
+                    <i class="fas fa-shield-halved"></i> Proteção em Massa
+                </div>
+                <div class="nav-item" onclick="showSection('endpoints')">
+                    <i class="fas fa-plug"></i> Endpoints
+                </div>
+                <div class="nav-item" onclick="showSection('miniservice')">
+                    <i class="fas fa-microchip"></i> Mini Service
+                </div>
+                <div class="nav-item" onclick="showSection('protection')">
+                    <i class="fas fa-user-shield"></i>
+                    <span>Proteção em Massa</span>
+                </div>                <div class="nav-item" onclick="showSection('database')">
+                    <i class="fas fa-database"></i>
+                    <span>Gerenciar Base</span>
+                </div>
+                <div class="nav-item" onclick="showSection('add-endpoint')">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Add Endpoint</span>
+                </div>
+                <div class="nav-item" onclick="showSection('performance')">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Performance & Cache</span>
+                </div>
+            </div>
+            <div class="nav-item" onclick="toggleTheme()">
+                <i class="fas fa-moon" id="theme-icon"></i> <span id="theme-text">Modo Claro</span>
+            </div>
+            <div class="logout-btn" onclick="logout()">
+                <i class="fas fa-sign-out-alt"></i> Sair do Sistema
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Overview Section -->
+            <div id="section-overview" class="content-section active">
+                <div class="header">
+                    <div class="welcome">
+                        <h2>Dashboard Administrativo</h2>
+                        <p>Monitoramento e Gerenciamento em Tempo Real.</p>
+                    </div>
+                    <div id="server-time" style="color: var(--text-muted); font-weight: 600;"></div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(0, 242, 255, 0.1); color: var(--primary);"><i class="fas fa-bolt"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-total">0</div>
+                        <div class="stat-label">Total de Requisições</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(112, 0, 255, 0.1); color: var(--secondary);"><i class="fas fa-key"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-keys">0</div>
+                        <div class="stat-label">Chaves Ativas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--success);"><i class="fas fa-clock"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-uptime">0h 0m</div>
+                        <div class="stat-label">Uptime do Servidor</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--danger);"><i class="fas fa-bug"></i></div>
+                        </div>
+                        <div class="stat-value" id="stat-errors">0</div>
+                        <div class="stat-label">Erros Detectados</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-chart-area"></i> Tráfego em Tempo Real</div>
+                        <div id="mainChart"></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-laptop"></i> Dispositivos</div>
+                        <div id="deviceChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Keys Section -->
+            <div id="section-keys" class="content-section">
+                <div class="header">
+                    <h2>Gerenciamento de API Keys & Cotas</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="text" placeholder="Buscar chave..." class="form-input" style="padding: 8px 15px; font-size: 13px; width: 200px; margin-bottom: 0;" onkeyup="filterTable('keys-table', this.value)">
+                        <button class="btn btn-primary" onclick="openAddKeyModal()"><i class="fas fa-plus"></i> Nova Chave</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <table id="keys-table">
+                        <thead>
+                            <tr>
+                                <th>Chave</th>
+                                <th>Dono</th>
+                                <th>Cota Diária</th>
+                                <th>Uso Total</th>
+                                <th>Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Audit Section -->
+            <div id="section-audit" class="content-section">
+                <div class="header">
+                    <h2>Registro de Auditoria</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="text" placeholder="Filtrar logs..." class="form-input" style="padding: 8px 15px; font-size: 13px; width: 200px; margin-bottom: 0;" onkeyup="filterTable('audit-table', this.value)">
+                        <button class="btn btn-sm" onclick="exportAudit('csv')"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                        <button class="btn btn-sm" onclick="exportAudit('json')"><i class="fas fa-file-code"></i> Exportar JSON</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <table id="audit-table">
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>API Key</th>
+                                <th>Tipo</th>
+                                <th>Ação</th>
+                                <th>Detalhes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Health Section -->
+            <div id="section-health" class="content-section">
+                <div class="header"><h2>Saúde das APIs Externas</h2></div>
+                <div class="card">
+                    <div class="health-grid" id="health-container"></div>
+                </div>
+            </div>
+
+            <!-- Endpoints Section -->
+            <div id="section-endpoints" class="content-section">
+                <div class="header"><h2>Gerenciamento de Endpoints</h2></div>
+                <div class="card">
+                    <table id="endpoints-table">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>ID</th>
+                                <th>Total Requests</th>
+                                <th>Status</th>
+                                <th>Manutenção</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Mini Service Section -->
+            <div id="section-miniservice" class="content-section">
+                <div class="header"><h2>Controle do Mini Service</h2></div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Status Global</div>
+                        <div class="stat-value" id="ms-status">Ativo</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Uso Total (Free)</div>
+                        <div class="stat-value" id="ms-usage">0</div>
+                    </div>
+                </div>
+                <div class="charts-grid">
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-chart-bar"></i> Uso por Endpoint (Mini Service)</div>
+                        <div id="msChart"></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-toggle-on"></i> Controles Rápidos</div>
+                        <div class="form-group">
+                            <label class="input-label">Sistema Free</label>
+                            <button class="btn btn-primary" id="btn-toggle-ms" onclick="toggleMiniService()">Desativar Sistema</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Docs Manager Section -->
+            <div id="section-docs-manager" class="content-section">
+                <div class="header"><h2>Guia de Desenvolvimento & Docs</h2></div>
+                
+                <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Estrutura de Código -->
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-code"></i> Estrutura do Endpoint</h3>
+                        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                            Os endpoints dinâmicos devem retornar um objeto JSON. Você tem acesso às variáveis <code>query</code> (parâmetros da URL) e <code>fetch</code> (para requisições externas).
+                        </p>
+                        <div style="background: #000; padding: 15px; border-radius: 12px; font-family: monospace; font-size: 12px; color: #00f2ff; border: 1px solid var(--border);">
+                            <span style="color: #7000ff;">// Exemplo de Estrutura Correta</span><br>
+                            <span style="color: #ffcc00;">const</span> { cpf } = query;<br>
+                            <span style="color: #ffcc00;">if</span> (!cpf) <span style="color: #ffcc00;">return</span> { erro: <span style="color: #00ff9d;">"CPF obrigatório"</span> };<br><br>
+                            <span style="color: #ffcc00;">const</span> res = <span style="color: #ffcc00;">await</span> fetch(<span style="color: #00ff9d;">`https://api.exemplo.com/v1/${cpf}`</span>);<br>
+                            <span style="color: #ffcc00;">const</span> data = <span style="color: #ffcc00;">await</span> res.json();<br><br>
+                            <span style="color: #ffcc00;">return</span> {<br>
+                            &nbsp;&nbsp;sucesso: <span style="color: #ffcc00;">true</span>,<br>
+                            &nbsp;&nbsp;resultado: data<br>
+                            };
+                        </div>
+                    </div>
+
+                    <!-- Parâmetros e Segurança -->
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-shield-alt"></i> Padrões de Segurança</h3>
+                        <ul style="color: var(--text-muted); font-size: 13px; padding-left: 20px; line-height: 1.6;">
+                            <li><strong>API_KEY:</strong> O sistema injeta automaticamente a validação de chave antes de chegar ao seu código.</li>
+                            <li><strong>WAF:</strong> Proteção contra SQL Injection e XSS é aplicada nos parâmetros da <code>query</code>.</li>
+                            <li><strong>Timeout:</strong> Requisições externas via <code>fetch</code> têm timeout padrão de 10s.</li>
+                            <li><strong>Retorno:</strong> Sempre retorne um objeto. O campo <code>criador: "@MutanoX"</code> é adicionado automaticamente.</li>
+                        </ul>
+                        <div style="margin-top: 20px; padding: 15px; background: rgba(112, 0, 255, 0.05); border-radius: 12px; border: 1px solid rgba(112, 0, 255, 0.1);">
+                            <span style="color: var(--secondary); font-weight: 700; font-size: 12px;">DICA PRO:</span><br>
+                            <span style="font-size: 12px;">Use <code>try/catch</code> dentro do seu código para capturar erros de APIs externas e retornar mensagens amigáveis.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 20px;">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-file-medical"></i> Editor de Documentação Automática</h3>
+                        <button class="btn btn-sm" onclick="refreshAutoDocs()"><i class="fas fa-sync"></i> Sincronizar Agora</button>
+                    </div>
+                    <div class="form-group">
+                        <label class="input-label">Visualização do JSON de Documentação (Gerado Automaticamente)</label>
+                        <textarea id="docs-content" class="form-input" rows="10" style="font-family: monospace; font-size: 12px; background: #0a0a0a; color: #00ff9d;" readonly></textarea>
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 11px;">* Este conteúdo é gerado com base nos endpoints ativos e dinâmicos cadastrados no sistema.</p>
+                </div>
+            </div>
+
+            <!-- Bulk Protection Section -->
+            <div id="section-protection" class="content-section">
+                <div class="header"><h2>Gerenciamento de Proteção</h2></div>
+                <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-user-shield"></i> Adicionar Individual</h3>
+                        <div class="form-group">
+                            <label class="input-label">Nome Completo</label>
+                            <input type="text" id="single-prot-nome" class="form-input" placeholder="Ex: João Silva">
+                        </div>
+                        <div class="form-group">
+                            <label class="input-label">CPF (Apenas números)</label>
+                            <input type="text" id="single-prot-cpf" class="form-input" placeholder="Ex: 12345678900">
+                        </div>
+                        <div class="form-group">
+                            <label class="input-label">Telefone</label>
+                            <input type="text" id="single-prot-phone" class="form-input" placeholder="Ex: 11999999999">
+                        </div>
+                        <div class="form-group">
+                            <label class="input-label">Expiração (Opcional)</label>
+                            <input type="date" id="single-prot-expiry" class="form-input">
+                        </div>
+                        <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="addSingleProtection()">Proteger Usuário</button>
+                    </div>
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-users-cog"></i> Proteção em Massa</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 15px; font-size: 12px;">
+                            Formato: <b>Nome, CPF, Telefone, Expiração(YYYY-MM-DD)</b> (um por linha)
+                        </p>
+                        <textarea id="bulk-protection-input" class="form-input" rows="8" placeholder="João Silva, 12345678900, 11999999999, 2026-12-31"></textarea>
+                        <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="processBulkProtection()">Processar Lista</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customization Section -->
+            <div id="section-custom" class="content-section">
+                <div class="header"><h2>Customização & Editor Visual</h2></div>
+                <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-palette"></i> Editor de Temas</h3>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div class="form-group">
+                                <label class="input-label">Cor Primária (Neon)</label>
+                                <input type="color" id="custom-primary-color" class="form-input" style="height: 45px; padding: 5px;" oninput="updateLivePreview()">
+                            </div>
+                            <div class="form-group">
+                                <label class="input-label">Cor Secundária</label>
+                                <input type="color" id="custom-secondary-color" class="form-input" style="height: 45px; padding: 5px;" oninput="updateLivePreview()">
+                            </div>
+                            <div class="form-group">
+                                <label class="input-label">Tipo de Layout</label>
+                                <select id="custom-layout-type" class="form-input" onchange="updateLivePreview()">
+                                    <option value="modern">Moderno (Futurista)</option>
+                                    <option value="classic">Clássico (Limpo)</option>
+                                    <option value="minimal">Minimalista</option>
+                                    <option value="glass">Glassmorphism</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="input-label">Arredondamento (Bordas)</label>
+                                <input type="range" id="custom-border-radius" min="0" max="30" value="12" class="form-input" oninput="updateLivePreview()">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-eye"></i> Preview em Tempo Real</h3>
+                        <div id="theme-preview" style="border: 1px solid var(--border); padding: 20px; border-radius: 12px; background: #0a0a0a;">
+                            <div id="preview-header" style="height: 10px; width: 50%; background: var(--primary); margin-bottom: 10px; border-radius: 5px;"></div>
+                            <div style="display: flex; gap: 10px;">
+                                <div style="width: 30px; height: 30px; background: var(--secondary); border-radius: 5px;"></div>
+                                <div style="flex: 1; height: 30px; background: #1a1a1a; border-radius: 5px;"></div>
+                            </div>
+                            <button class="btn btn-primary" style="margin-top: 15px; width: 100%; pointer-events: none;">Botão Exemplo</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card" style="margin-top: 20px;">
+                    <h3 class="card-title"><i class="fas fa-comment-alt"></i> Mensagens do Sistema</h3>
+                    <div class="form-group">
+                        <label class="input-label">Mensagem de Proteção</label>
+                        <textarea id="custom-protection-msg" class="form-input" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="input-label">Mensagem de Manutenção</label>
+                        <textarea id="custom-maintenance-msg" class="form-input" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="input-label">Mensagem de Boas-vindas (Free)</label>
+                        <textarea id="custom-free-msg" class="form-input" rows="2"></textarea>
+                    </div>
+                    <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-group">
+                            <label class="input-label">Texto do Banner</label>
+                            <input type="text" id="custom-ad-text" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="input-label">Link do Banner</label>
+                            <input type="text" id="custom-ad-link" class="form-input">
+                        </div>
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="custom-show-stats" style="width: 20px; height: 20px;">
+                        <label class="input-label" style="margin-bottom: 0;">Mostrar Widget de Estatísticas no Mini Service</label>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveCustomization()"><i class="fas fa-save"></i> Salvar e Aplicar Tema</button>
+                </div>
+            </div>
+
+            <!-- Security Section -->
+            <div id="section-security" class="content-section">
+                <div class="header"><h2>Segurança & Firewall</h2></div>
+                <div class="card">
+                    <div class="form-group">
+                        <label class="input-label">IPs Bloqueados (Blacklist)</label>
+                        <textarea id="security-blacklist" class="form-input" rows="4" placeholder="Um IP por linha"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="input-label">Rate Limit Global (req/min)</label>
+                        <input type="number" id="security-rate-limit" class="form-input" value="60">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="security-anti-ddos" checked style="width: 20px; height: 20px;">
+                        <label class="input-label" style="margin-bottom: 0;">Ativar Proteção Anti-DDoS Inteligente</label>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="saveSecurity()"><i class="fas fa-shield-virus"></i> Aplicar Regras</button>
+                        <button class="btn" style="background: var(--danger); color: white;" onclick="clearLogs()"><i class="fas fa-trash"></i> Limpar Logs</button>
+                        <button class="btn" style="background: var(--glass); color: var(--text-main);" onclick="blockIP()"><i class="fas fa-user-slash"></i> Bloquear IP</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database Section -->
+            <div id="section-database" class="content-section">
+                <div class="header"><h2>Gerenciamento da Base</h2></div>
+                <div class="card">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total de Registros</div>
+                            <div class="stat-value">1.2M+</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Tamanho da Base</div>
+                            <div class="stat-value">450MB</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button class="btn btn-primary"><i class="fas fa-upload"></i> Importar JSON</button>
+                                   <button class="btn btn-primary" style="background: var(--secondary);" onclick="backupDatabase()"><i class="fas fa-download"></i> Backup Completo</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Section -->
+            <div id="section-performance" class="content-section">
+                <div class="header"><h2>Performance & Monitoramento</h2></div>
+                <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-bolt"></i> Cache em Tempo Real</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 15px;">Gerencie o armazenamento temporário de dados para máxima velocidade.</p>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <button class="btn btn-primary" onclick="clearSystemCache()"><i class="fas fa-broom"></i> Limpar Todo o Cache</button>
+                            <div class="form-group">
+                                <label class="input-label">Limpar Cache de Endpoint Específico</label>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="text" id="cache-endpoint-name" class="form-input" placeholder="ex: cpf">
+                                    <button class="btn" onclick="clearEndpointCache()"><i class="fas fa-eraser"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 class="card-title"><i class="fas fa-globe"></i> Latência por Região</h3>
+                        <div id="latency-monitor" style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>América do Sul (São Paulo)</span>
+                                <span class="badge badge-success">12ms</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>América do Norte (Virgínia)</span>
+                                <span class="badge badge-warning">145ms</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Europa (Frankfurt)</span>
+                                <span class="badge badge-danger">210ms</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Endpoint Section -->
+            <div id="section-add-endpoint" class="content-section">
+                <div class="header"><h2>Novo Endpoint Dinâmico</h2></div>
+                <div class="card">
+                    <div class="form-group">
+                        <label class="input-label">Nome do Endpoint (Rota)</label>
+                        <input type="text" id="new-ep-name" class="form-input" placeholder="ex: consulta-veiculo">
+                    </div>
+                    <div class="form-group">
+                        <label class="input-label">Código Node.js (Lógica do Endpoint)</label>
+                        <textarea id="new-ep-code" class="form-input" rows="12" style="font-family: monospace; background: #0a0a0a; color: #00f2ff;" placeholder="const response = await fetch('...');&#10;return response.json();"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="input-label">Parâmetros (Separados por vírgula)</label>
+                        <input type="text" id="new-ep-params" class="form-input" placeholder="cpf, token, tipo">
+                    </div>
+                    <button class="btn btn-primary" onclick="openTestModal()"><i class="fas fa-vial"></i> Testar Endpoint</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Key Modal -->
+    <div id="add-key-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 20px;">Nova API Key</h3>
+            <div class="form-group">
+                <label class="input-label">Dono</label>
+                <input type="text" id="add-key-owner" class="form-input" placeholder="Nome do cliente">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Cota Diária (0 = Ilimitado)</label>
+                <input type="number" id="add-key-limit" class="form-input" value="100">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Cargo</label>
+                <select id="add-key-role" class="form-input">
+                    <option value="user">Usuário Comum</option>
+                    <option value="premium">Premium</option>
+                    <option value="admin">Administrador</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="saveNewKey()">Gerar Chave</button>
+                <button class="btn" onclick="closeModal('add-key-modal')">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Key Modal -->
+    <div id="edit-key-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 20px;">Editar API Key</h3>
+            <input type="hidden" id="edit-key-id">
+            <div class="form-group">
+                <label class="input-label">Dono</label>
+                <input type="text" id="edit-key-owner" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Cota Diária (0 = Ilimitado)</label>
+                <input type="number" id="edit-key-limit" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Status</label>
+                <select id="edit-key-status" class="form-input">
+                    <option value="true">Ativa</option>
+                    <option value="false">Inativa</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="saveKeyEdit()">Salvar</button>
+                <button class="btn" onclick="closeModal('edit-key-modal')">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Endpoint Modal -->
+    <div id="test-ep-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h3 style="margin-bottom: 20px;"><i class="fas fa-flask"></i> Testar Novo Endpoint</h3>
+            <div id="test-params-container">
+                <!-- Parâmetros dinâmicos aqui -->
+            </div>
+            <div style="margin-top: 20px;">
+                <label class="input-label">Resultado do Teste (JSON)</label>
+                <pre id="test-result-display" style="background: #0a0a0a; color: #00f2ff; padding: 15px; border-radius: 8px; max-height: 300px; overflow: auto;">Aguardando execução...</pre>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" id="btn-run-test" onclick="runEndpointTest()"><i class="fas fa-play"></i> Executar Teste</button>
+                <button class="btn btn-success" id="btn-deploy-ep" style="display: none;" onclick="deployEndpoint()"><i class="fas fa-cloud-upload-alt"></i> Adicionar Endpoint</button>
+                <button class="btn" onclick="closeModal('test-ep-modal')">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal" style="display: none;">
+        <div class="card" style="width: 100%; max-width: 400px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <i class="fas fa-bolt" style="font-size: 40px; color: var(--primary); margin-bottom: 15px;"></i>
+                <h2>Acesso Restrito</h2>
+                <p style="color: var(--text-muted);">Entre com suas credenciais admin</p>
+            </div>
+            <div class="form-group">
+                <label class="input-label">Usuário</label>
+                <input type="text" id="login-user" class="form-input" placeholder="admin">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Chave Mestra</label>
+                <input type="password" id="login-pass" class="form-input" placeholder="••••••••">
+            </div>
+            <button class="btn btn-primary" style="width: 100%;" onclick="attemptLogin()">Entrar no Dashboard</button>
+        </div>
+    </div>
+
+    <script src="/admin/dashboard-new.js"></script>
+</body>
+</html>

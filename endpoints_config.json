@@ -1,0 +1,127 @@
+{
+  "cpf": {
+    "name": "Consultar CPF",
+    "description": "Consulta completa de dados pessoais",
+    "maintenance": false,
+    "active": true,
+    "latency": 500
+  },
+  "nome": {
+    "name": "Consultar Nome",
+    "description": "Busca por nome completo",
+    "maintenance": false,
+    "active": true
+  },
+  "numero": {
+    "name": "Consultar Telefone",
+    "description": "Consulta de dados telefônicos",
+    "maintenance": false,
+    "active": true
+  },
+  "bypass": {
+    "name": "Bypass City",
+    "description": "Bypass de proteção",
+    "maintenance": false,
+    "active": true
+  },
+  "bypasscf": {
+    "name": "Bypass Cloudflare",
+    "description": "Bypass de proteção CF",
+    "maintenance": false,
+    "active": true
+  },
+  "infoff": {
+    "name": "Free Fire Info",
+    "description": "Informações de conta Free Fire",
+    "maintenance": false,
+    "active": true
+  },
+  "downloader": {
+    "name": "AIO Downloader",
+    "description": "Download de mídias",
+    "maintenance": false,
+    "active": true
+  },
+  "github": {
+    "name": "GitHub Search",
+    "description": "Busca de usuários",
+    "maintenance": false,
+    "active": true
+  },
+  "gimage": {
+    "name": "Google Images",
+    "description": "Busca de imagens",
+    "maintenance": false,
+    "active": true
+  },
+  "pinterest": {
+    "name": "Pinterest Search",
+    "description": "Busca de pins",
+    "maintenance": false,
+    "active": true
+  },
+  "roblox": {
+    "name": "Roblox Stalk",
+    "description": "Info de usuários",
+    "maintenance": false,
+    "active": true
+  },
+  "tiktok": {
+    "name": "TikTok Search",
+    "description": "Busca de perfis",
+    "maintenance": false,
+    "active": true
+  },
+  "yt": {
+    "name": "YouTube Search",
+    "description": "Busca de vídeos",
+    "maintenance": false,
+    "active": true
+  },
+  "video": {
+    "name": "Text to Video",
+    "description": "Geracao de videos",
+    "maintenance": false,
+    "active": true
+  },
+  "nsfw": {
+    "name": "NSFW Generator",
+    "description": "Geracao de imagens",
+    "maintenance": false,
+    "active": true
+  },
+  "clima": {
+    "maintenance": false,
+    "rateLimit": 10,
+    "latency": 0,
+    "active": true
+  },
+  "cotacao": {
+    "maintenance": false,
+    "rateLimit": 10,
+    "latency": 0,
+    "active": true
+  },
+  "qrcode": {
+    "maintenance": false,
+    "rateLimit": 10,
+    "latency": 0,
+    "active": true
+  },
+  "shorten": {
+    "maintenance": false,
+    "rateLimit": 10,
+    "latency": 0,
+    "active": true
+  },
+  "teste-dinamico": {
+    "active": true,
+    "maintenance": false,
+    "latency": 0,
+    "rateLimit": 60,
+    "params": [
+      "id"
+    ],
+    "dynamic": true
+  }
+}

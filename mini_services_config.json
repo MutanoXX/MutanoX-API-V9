@@ -1,0 +1,14 @@
+{
+  "active": true,
+  "message": "NOVA MENSAGEM REALTIME",
+  "protectionMessage": "esta pessoa está protegida pelo sistema, quer proteção? adquira proteção por 5R$ e tenha proteção eterna.",
+  "maintenanceMessage": "Este endpoint está em manutenção temporária",
+  "expiresAt": "2026-01-08T21:54:38.234Z",
+  "usageCount": 2,
+  "adBanner": "Anuncie aqui! @MutanoX",
+  "adLink": "https://t.me/MutanoX",
+  "primaryColor": "#00f2ff",
+  "secondaryColor": "#7000ff",
+  "showStatsWidget": true,
+  "layoutType": "modern"
+}

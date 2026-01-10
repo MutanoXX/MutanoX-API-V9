@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MutanoX | Production Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --secondary: #6366f1;
+            --bg-dark: #0a0f1a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(51, 65, 85, 0.5);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .cyber-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+
+        .status-pulse {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 0 rgba(16, 185, 129, 0.4);
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .terminal {
+            background: #0f172a;
+            border-radius: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 16px;
+            border: 1px solid #334155;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 4px;
+        }
+
+        .log-success { color: #10b981; }
+        .log-error { color: #ef4444; }
+        .log-warning { color: #f59e0b; }
+        .log-info { color: #3b82f6; }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #10b981;
+        }
+
+        .hidden { display: none !important; visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }
+
+        .tab-btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: rgba(15, 23, 42, 0.5);
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            border-color: #10b981;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-active { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .badge-user { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+
+        .fixed-inset { position: fixed; inset: 0; }
+        .z-1000 { z-index: 1000; }
+
+        /* Login Screen Enhancements */
+        .login-background {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(10, 15, 26, 1) 0%, rgba(16, 185, 129, 0.1) 50%, rgba(10, 15, 26, 1) 100%);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .login-background::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 50%);
+            animation: backgroundPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes backgroundPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .login-card {
+            max-width: 480px;
+            width: 90%;
+            padding: 48px 40px;
+            border: 2px solid rgba(16, 185, 129, 0.4);
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+            backdrop-filter: blur(20px);
+            box-shadow:
+                0 25px 50px -12px rgba(0, 0, 0, 0.5),
+                0 0 100px rgba(16, 185, 129, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            animation: cardFloat 6s ease-in-out infinite;
+        }
+
+        @keyframes cardFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .login-logo-container {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .login-logo-icon {
+            font-size: 72px;
+            color: #10b981;
+            margin-bottom: 20px;
+            display: inline-block;
+            animation: logoGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes logoGlow {
+            0%, 100% {
+                filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.6));
+                transform: scale(1);
+            }
+            50% {
+                filter: drop-shadow(0 0 40px rgba(16, 185, 129, 0.9));
+                transform: scale(1.05);
+            }
+        }
+
+        .login-title {
+            font-size: 42px;
+            font-weight: 900;
+            color: #10b981;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #10b981 0%, #34d399 50%, #10b981 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .login-subtitle {
+            color: #94a3b8;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            font-weight: 600;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .login-input-group {
+            position: relative;
+        }
+
+        .login-input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+            font-size: 18px;
+            transition: all 0.3s;
+            z-index: 1;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 16px 16px 16px 48px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 2px solid #334155;
+            border-radius: 14px;
+            color: #fff;
+            font-size: 15px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.3s;
+        }
+
+        .login-input::placeholder {
+            color: #64748b;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+        }
+
+        .login-input:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1), 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .login-input:focus + .login-input-icon {
+            color: #10b981;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-btn i {
+            font-size: 18px;
+        }
+
+        .login-error {
+            text-align: center;
+            color: #ef4444;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 10px;
+            animation: errorShake 0.5s ease-in-out;
+        }
+
+        @keyframes errorShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 24px 0;
+            color: #475569;
+            font-size: 12px;
+        }
+
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, #475569 50%, transparent 100%);
+        }
+
+        .login-info {
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.6;
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 10px;
+            border: 1px solid #334155;
+        }
+
+        .login-info strong {
+            color: #94a3b8;
+        }
+
+        /* Utility Classes */
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .justify-between { justify-content: space-between; }
+        .justify-center { justify-content: center; }
+        .items-center { align-items: center; }
+        .gap-4 { gap: 16px; }
+        .grid { display: grid; gap: 1rem; }
+        .grid-cols-1 { grid-template-columns: 1fr; }
+        @media (min-width: 1024px) {
+            .grid-cols-lg-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        .w-full { width: 100%; }
+        .mb-6 { margin-bottom: 24px; }
+        .p-5 { padding: 20px; }
+        .text-lg { font-size: 18px; font-weight: 700; }
+        .text-muted { color: #64748b; }
+        .text-center { text-align: center; }
+
+        /* Protection Form Styles */
+        .protection-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 32px;
+        }
+
+        /* Endpoints Grid Styles */
+        .endpoints-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+            padding: 32px;
+        }
+
+        .protection-item {
+            padding: 20px;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .protection-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            border-color: rgba(16, 185, 129, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="fixed-inset z-1000 flex items-center justify-center" style="background: rgba(10, 15, 26, 0.98);">
+        <div class="login-background"></div>
+        <div class="login-card" style="position: relative; z-index: 10;">
+            <div class="login-logo-container">
+                <i class="fas fa-shield-halved login-logo-icon"></i>
+                <h1 class="login-title">MUTANOX</h1>
+                <p class="login-subtitle">Admin Dashboard</p>
+            </div>
+            <form class="login-form" onsubmit="event.preventDefault(); login();">
+                <div class="login-input-group">
+                    <input type="text" id="admin-username" class="login-input" placeholder="Usuário" autocomplete="username">
+                    <i class="fas fa-user login-input-icon"></i>
+                </div>
+                <div class="login-input-group">
+                    <input type="password" id="admin-password" class="login-input" placeholder="Senha" autocomplete="current-password">
+                    <i class="fas fa-lock login-input-icon"></i>
+                </div>
+                <button type="submit" class="login-btn">
+                    <i class="fas fa-lock-open"></i>
+                    <span>Acessar Sistema</span>
+                </button>
+            </form>
+            <p id="login-error" class="login-error hidden">
+                <i class="fas fa-exclamation-circle"></i> Credenciais inválidas!
+            </p>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999;"></div>
+
+    <!-- Selection Modal -->
+    <div id="selection-modal" class="fixed-inset z-1000 hidden" style="background: rgba(10, 15, 26, 0.9);">
+        <div class="cyber-card" style="max-width: 800px; margin: 50px auto; padding: 0; overflow: hidden;">
+            <div class="p-5" style="border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+                <h3 class="text-lg">Selecione a Pessoa</h3>
+                <button onclick="closeSelectionModal()" style="background:none; border:none; color:#fff; cursor:pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="selection-results" class="p-5" style="max-height: 60vh; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="dashboard-content" class="container hidden">
+        <header class="cyber-card mb-6" style="padding: 16px 24px; display: flex; justify-content: space-between; items-center: center;">
+            <h1 style="font-size: 20px;">MUTANOX <span style="color: #10b981;">PRODUCTION</span></h1>
+            <div class="flex gap-4">
+                <button onclick="forceRefresh()" class="tab-btn"><i class="fas fa-sync-alt"></i></button>
+                <button onclick="logout()" class="tab-btn" style="color: #ef4444;"><i class="fas fa-power-off"></i></button>
+            </div>
+        </header>
+
+        <nav class="flex gap-4 mb-6">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn active">Dashboard</button>
+            <button onclick="switchTab('keys')" id="tab-keys" class="tab-btn">API Keys</button>
+            <button onclick="switchTab('endpoints')" id="tab-endpoints" class="tab-btn">Endpoints</button>
+            <button onclick="switchTab('protection')" id="tab-protection" class="tab-btn">Proteção</button>
+            <button onclick="switchTab('logs')" id="tab-logs" class="tab-btn">Logs</button>
+        </nav>
+
+        <!-- Tab Contents -->
+        <div id="content-dashboard">
+            <div class="grid grid-cols-1 grid-cols-lg-3 gap-6 mb-6">
+                <div class="cyber-card p-5">
+                    <p class="text-muted text-xs uppercase">Total Requests</p>
+                    <h2 id="stat-total" class="text-4xl">0</h2>
+                </div>
+                <div class="cyber-card p-5">
+                    <p class="text-muted text-xs uppercase">Active Keys</p>
+                    <h2 id="stat-keys" class="text-4xl">0</h2>
+                </div>
+                <div class="cyber-card p-5">
+                    <p class="text-muted text-xs uppercase">Uptime</p>
+                    <h2 id="stat-uptime" class="text-4xl">0s</h2>
+                </div>
+            </div>
+            <div class="cyber-card p-5">
+                <h3 class="text-lg mb-4">Request Timeline</h3>
+                <div style="height: 300px;"><canvas id="timelineChart"></canvas></div>
+            </div>
+        </div>
+
+        <div id="content-keys" class="hidden">
+            <div class="cyber-card p-5">
+                <div class="flex justify-between mb-4">
+                    <h3 class="text-lg">API Keys</h3>
+                    <button onclick="openCreateModal()" class="btn-primary">Nova Chave</button>
+                </div>
+                <div id="keys-list" class="grid grid-cols-1 gap-4"></div>
+            </div>
+        </div>
+
+        <div id="content-endpoints" class="hidden">
+            <div class="card" style="padding: 32px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <h3 style="font-size: 24px; font-weight: 700; color: var(--text-main);">
+                        <i class="fas fa-plug" style="color: var(--secondary); margin-right: 10px;"></i>
+                        Gerenciamento de Endpoints
+                    </h3>
+                    <div style="color: var(--text-muted); font-size: 14px;">
+                        <strong id="stat-endpoints">19</strong> endpoints ativos
+                    </div>
+                </div>
+                <div class="endpoints-grid" id="endpoints-grid"></div>
+            </div>
+        </div>
+
+        <div id="content-protection" class="hidden">
+            <div class="card">
+                <div class="protection-form">
+                    <div style="grid-column: span 2;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-muted);">Nome</label>
+                        <input type="text" id="prot-nome" class="form-control" placeholder="Nome para proteger">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-muted);">CPF</label>
+                        <input type="text" id="prot-cpf" class="form-control" placeholder="CPF">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-muted);">Número</label>
+                        <input type="text" id="prot-numero" class="form-control" placeholder="Telefone">
+                    </div>
+                    <div style="grid-column: span 1;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-muted);">Duração (segundos)</label>
+                        <input type="number" id="prot-duration" class="form-control" placeholder="3600">
+                    </div>
+                    <div style="display: flex; align-items: center; height: 60px; grid-column: span 1;">
+                        <label style="display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--text-main); cursor: pointer; font-size: 16px;">
+                            <input type="checkbox" id="prot-permanent" style="width: 20px; height: 20px; cursor: pointer;">
+                            <span style="color: var(--primary); font-weight: 700;">PROTEÇÃO PERMANENTE</span>
+                        </label>
+                        <i class="fas fa-infinity" style="color: var(--primary); font-size: 24px; margin-left: 10px;"></i>
+                    </div>
+                </div>
+                <div style="padding: 0 32px 32px 32px; display: flex; gap: 12px;">
+                    <button onclick="addProtection()" class="btn btn-primary" style="flex: 1;">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Adicionar Proteção</span>
+                    </button>
+                    <button onclick="clearProtectionForm()" class="btn btn-secondary" style="flex: 1;">
+                        <i class="fas fa-times"></i>
+                        <span>Limpar</span>
+                    </button>
+                </div>
+                <div class="protection-list" style="padding-top: 0;">
+                    <h4 style="margin-bottom: 20px; color: var(--text-muted); font-size: 16px;">
+                        <i class="fas fa-list-shield" style="margin-right: 10px;"></i>
+                        Lista de Proteções
+                    </h4>
+                    <div id="protection-list-items"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="content-logs" class="hidden">
+            <div class="cyber-card p-5">
+                <h3 class="text-lg mb-4">System Logs</h3>
+                <div id="terminal" class="terminal" style="height: 500px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Key Modal -->
+    <div id="create-modal" class="fixed-inset z-1000 hidden flex items-center justify-center" style="background: rgba(10, 15, 26, 0.9);">
+        <div class="cyber-card p-6" style="width: 400px;">
+            <h3 class="text-lg mb-4">Nova API Key</h3>
+            <input type="text" id="new-owner" class="input-field mb-4" placeholder="Dono">
+            <select id="new-role" class="input-field mb-4">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+            </select>
+            <div class="flex gap-4">
+                <button onclick="createKey()" class="btn-primary w-full">Criar</button>
+                <button onclick="closeCreateModal()" class="tab-btn w-full">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/dashboards/dashboard-new.js"></script>
+</body>
+</html>

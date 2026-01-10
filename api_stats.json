@@ -1,0 +1,18 @@
+{
+  "startTime": 1767833950274,
+  "totalRequests": 8,
+  "endpointHits": {
+    "clima": 1,
+    "cotacao": 1,
+    "qrcode": 1,
+    "shorten": 1,
+    "cpf": 2,
+    "teste-dinamico": 2
+  },
+  "errors": 0,
+  "deviceHits": {
+    "desktop": 2,
+    "mobile": 0,
+    "tablet": 0
+  }
+}

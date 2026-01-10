@@ -1,0 +1,62 @@
+{
+  "MutanoX3397": {
+    "owner": "Admin",
+    "role": "admin",
+    "active": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "usageCount": 47,
+    "lastUsed": "2026-01-09T15:02:03.196Z",
+    "dailyUsage": 2,
+    "lastReset": "Fri Jan 09 2026"
+  },
+  "test-key": {
+    "owner": "Teste",
+    "role": "user",
+    "active": true,
+    "usageCount": 12,
+    "lastUsed": "2026-01-07T21:16:51.875Z",
+    "createdAt": "2026-01-07T18:30:00.000Z",
+    "dailyUsage": 0,
+    "lastReset": "Fri Jan 09 2026"
+  },
+  "UserKey123": {
+    "owner": "Joao",
+    "role": "user",
+    "active": true,
+    "createdAt": "2026-01-07T13:01:38.028Z",
+    "dailyUsage": 0,
+    "lastReset": "Fri Jan 09 2026"
+  },
+  "MutanoX-af1b54984b1fafed": {
+    "owner": "Carlos",
+    "role": "user",
+    "active": true,
+    "usageCount": 1,
+    "lastUsed": "2026-01-07T13:09:10.436Z",
+    "createdAt": "2026-01-07T13:09:10.418Z",
+    "dailyUsage": 0,
+    "lastReset": "Fri Jan 09 2026"
+  },
+  "MutanoX-bf4c326050e5a68b": {
+    "owner": "MutanoUser",
+    "role": "user",
+    "active": true,
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": "2026-01-07T13:15:24.786Z",
+    "dailyUsage": 0,
+    "lastReset": "Fri Jan 09 2026"
+  },
+  "MutanoX-af2adc9db81d358b": {
+    "owner": "Manus Test",
+    "role": "user",
+    "active": true,
+    "usageCount": 0,
+    "lastUsed": null,
+    "createdAt": "2026-01-08T20:26:12.255Z",
+    "expiresAt": "2026-01-08T21:26:12.255Z",
+    "duration": "3600",
+    "dailyUsage": 0,
+    "lastReset": "Fri Jan 09 2026"
+  }
+}

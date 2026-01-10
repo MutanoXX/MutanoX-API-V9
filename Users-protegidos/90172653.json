@@ -1,0 +1,54 @@
+{
+  "id": "90172653",
+  "nome": "SABRINA MILENY SUAREZ VARGAS",
+  "cpf": "07803272177",
+  "numero": null,
+  "dadosCompletos": {
+    "dadosBasicos": {
+      "nome": "SABRINA MILENY SUAREZ VARGAS",
+      "cpf": "07803272177",
+      "cns": "708508301597378",
+      "dataNascimento": "11/05/2010 (15 anos)",
+      "sexo": "F - FEMININO",
+      "nomeMae": "KATIA VARGAS GEMIO",
+      "nomePai": "MIGUEL ANGEL SUAREZ PARADA",
+      "situacaoCadastral": "REGULAR",
+      "dataSituacao": "13/08/2018"
+    },
+    "dadosEconomicos": {
+      "renda": "R$ 225,84",
+      "poderAquisitivo": "MUITO BAIXO",
+      "faixaRenda": "De R$ 112 at? R$ 630",
+      "scoreCSBA": "1"
+    },
+    "enderecos": [
+      {
+        "logradouro": "RUA DOS DIAMANTES, 92",
+        "bairro": "COHAB VELHA",
+        "cidadeUF": "CACERES/MT",
+        "cep": "78210460"
+      },
+      {
+        "logradouro": "DOS COUTOS, 10",
+        "bairro": "COHAB NOVA",
+        "cidadeUF": "CACERES/MT",
+        "cep": "78200000"
+      }
+    ],
+    "tituloEleitor": {},
+    "dadosFiscais": {},
+    "beneficiosSociais": [],
+    "pessoaExpostaPoliticamente": {},
+    "servidorPublico": {},
+    "perfilConsumo": {},
+    "vacinas": [],
+    "informacoesImportantes": {
+      "cpfValido": "Não",
+      "obito": "NÃO",
+      "pep": "Não"
+    }
+  },
+  "active": true,
+  "createdAt": "2026-01-08T01:56:42.133Z",
+  "expiresAt": null
+}

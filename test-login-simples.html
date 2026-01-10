@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Simples de Login</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        input, button {
+            padding: 10px;
+            margin: 5px 0;
+            width: 100%;
+            background: #0f3460;
+            border: 1px solid #533483;
+            color: white;
+            border-radius: 4px;
+        }
+        button {
+            background: #10b981;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover { background: #059669; }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #0f3460;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste de Login (Validação Local)</h1>
+
+    <input type="text" id="username" placeholder="Usuário" value="admin">
+    <input type="password" id="password" placeholder="Senha" value="MutanoX3397">
+    <button onclick="testLogin()">Testar Login</button>
+
+    <div id="result"></div>
+
+    <div style="margin-top: 30px; padding: 15px; background: #16213e; border-radius: 8px;">
+        <h2>📋 Credenciais para teste:</h2>
+        <p><strong>Usuário:</strong> admin</p>
+        <p><strong>Senha:</strong> MutanoX3397</p>
+    </div>
+
+    <script>
+        function testLogin() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const resultDiv = document.getElementById('result');
+
+            if (!username || !password) {
+                resultDiv.innerHTML = '<p class="error">❌ Preencha todos os campos</p>';
+                return;
+            }
+
+            // Mesma lógica de validação do dashboard
+            if (username === 'admin' && password === 'MutanoX3397') {
+                resultDiv.innerHTML = `
+                    <p class="success">✅ Login bem-sucedido!</p>
+                    <p>Usuário: ${username}</p>
+                    <p>Senha: ***</p>
+                    <p>Status: Autenticado</p>
+                    <p style="margin-top: 10px; color: #3b82f6;">🎉 A lógica de validação local está funcionando!</p>
+                `;
+                localStorage.setItem('test_admin_key', 'MutanoX3397');
+            } else {
+                resultDiv.innerHTML = `
+                    <p class="error">❌ Credenciais inválidas!</p>
+                    <p>Usuário: ${username}</p>
+                    <p>Senha: ${password ? '***' : ''}</p>
+                `;
+            }
+        }
+
+        // Verificar se já tem localStorage
+        window.onload = function() {
+            const savedKey = localStorage.getItem('test_admin_key');
+            if (savedKey) {
+                document.getElementById('result').innerHTML = '<p class="success">✅ Login anterior detectado no localStorage!</p>';
+            }
+        }
+    </script>
+</body>
+</html>
