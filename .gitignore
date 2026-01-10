@@ -1,0 +1,36 @@
+# Node modules
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+logs/
+server.log
+
+# Environment variables
+.env
+.env.local
+
+# API Keys and sensitive data
+api_keys.json
+api_stats.json
+audit_logs.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build files
+dist/
+build/
+
+# Temporary files
+tmp/
+temp/
