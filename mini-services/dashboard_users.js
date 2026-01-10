@@ -3,6 +3,7 @@ let userApiKey = localStorage.getItem('mutanox_user_key');
 let userData = null;
 let socket;
 let charts = {};
+let systemStats = {};
 
 document.addEventListener('DOMContentLoaded', () => {
     applySavedTheme();
@@ -254,6 +255,15 @@ function initWebSocket() {
 
                 if (data.endpointHits) {
                     userData.endpointHits = data.endpointHits;
+                }
+                
+                if (data.endpointStats) {
+                    systemStats.endpointLatency = {};
+                    systemStats.endpointErrors = {};
+                    for (const [id, stats] of Object.entries(data.endpointStats)) {
+                        systemStats.endpointLatency[id] = [stats.avgLatency];
+                        systemStats.endpointErrors[id] = stats.errors;
+                    }
                     updateEndpointTable();
                 }
             }

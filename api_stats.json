@@ -1,18 +1,29 @@
 {
   "startTime": 1767833950274,
-  "totalRequests": 8,
+  "totalRequests": 10,
   "endpointHits": {
     "clima": 1,
     "cotacao": 1,
     "qrcode": 1,
     "shorten": 1,
-    "cpf": 2,
+    "cpf": 4,
     "teste-dinamico": 2
   },
   "errors": 0,
   "deviceHits": {
-    "desktop": 2,
+    "desktop": 4,
     "mobile": 0,
     "tablet": 0
+  },
+  "endpointLatency": {},
+  "endpointErrors": {},
+  "endpointLastUsed": {
+    "cpf": "2026-01-10T20:09:24.920Z"
+  },
+  "endpointRequestTimeline": {
+    "cpf": [
+      1768075482569,
+      1768075764920
+    ]
   }
 }
