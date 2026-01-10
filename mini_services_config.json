@@ -1,14 +1,64 @@
 {
-  "active": true,
-  "message": "NOVA MENSAGEM REALTIME",
-  "protectionMessage": "esta pessoa está protegida pelo sistema, quer proteção? adquira proteção por 5R$ e tenha proteção eterna.",
-  "maintenanceMessage": "Este endpoint está em manutenção temporária",
-  "expiresAt": "2026-01-08T21:54:38.234Z",
-  "usageCount": 2,
-  "adBanner": "Anuncie aqui! @MutanoX",
-  "adLink": "https://t.me/MutanoX",
-  "primaryColor": "#00f2ff",
-  "secondaryColor": "#7000ff",
-  "showStatsWidget": true,
-  "layoutType": "modern"
+  "services": {
+    "consultas": {
+      "active": true,
+      "name": "Consultas Gratuitas",
+      "description": "Busque por nome, telefone ou CPF",
+      "types": ["nome", "numero", "cpf"],
+      "theme": {
+        "primaryColor": "#00f2ff",
+        "secondaryColor": "#7000ff"
+      },
+      "welcomeMessage": "Bem-vindo ao Sistema de Consultas",
+      "enabledFeatures": ["search", "analytics"],
+      "analyticsData": {
+        "totalAccess": 0,
+        "uniqueUsers": 0,
+        "averageTime": 0,
+        "lastUpdate": null
+      }
+    },
+    "dashboard_users": {
+      "active": true,
+      "name": "Portal do Desenvolvedor",
+      "description": "Gerencie suas API Keys e estatísticas",
+      "theme": {
+        "primaryColor": "#00f2ff",
+        "secondaryColor": "#7000ff"
+      },
+      "welcomeMessage": "Bem-vindo ao Portal do Desenvolvedor",
+      "enabledFeatures": ["stats", "playground", "webhooks", "audit"],
+      "analyticsData": {
+        "totalAccess": 0,
+        "uniqueUsers": 0,
+        "averageTime": 0,
+        "lastUpdate": null
+      }
+    },
+    "docs": {
+      "active": true,
+      "name": "Documentação Interativa",
+      "description": "Documentação completa dos endpoints",
+      "theme": {
+        "primaryColor": "#00f2ff",
+        "secondaryColor": "#7000ff"
+      },
+      "welcomeMessage": "Explore nossa documentação",
+      "enabledFeatures": ["testing", "examples"],
+      "analyticsData": {
+        "totalAccess": 0,
+        "uniqueUsers": 0,
+        "averageTime": 0,
+        "lastUpdate": null
+      }
+    }
+  },
+  "global": {
+    "protectionMessage": "esta pessoa está protegida pelo sistema, quer proteção? adquira proteção por 5R$ e tenha proteção eterna.",
+    "maintenanceMessage": "Este endpoint está em manutenção temporária",
+    "adBanner": "Anuncie aqui! @MutanoX",
+    "adLink": "https://t.me/MutanoX",
+    "showStatsWidget": true,
+    "layoutType": "modern"
+  }
 }
