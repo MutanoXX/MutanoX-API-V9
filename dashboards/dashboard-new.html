@@ -365,9 +365,17 @@
                 <div class="header">
                     <h2>Registro de Auditoria</h2>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="text" placeholder="Filtrar logs..." class="form-input" style="padding: 8px 15px; font-size: 13px; width: 200px; margin-bottom: 0;" onkeyup="filterTable('audit-table', this.value)">
-                        <button class="btn btn-sm" onclick="exportAudit('csv')"><i class="fas fa-file-csv"></i> Exportar CSV</button>
-                        <button class="btn btn-sm" onclick="exportAudit('json')"><i class="fas fa-file-code"></i> Exportar JSON</button>
+                        <select class="form-input" style="padding: 8px 15px; font-size: 13px; width: 150px; margin-bottom: 0;" onchange="filterAuditByType(this.value)">
+                            <option value="">Todos os Tipos</option>
+                            <option value="ADMIN">ADMIN</option>
+                            <option value="USER">USER</option>
+                            <option value="SYSTEM">SYSTEM</option>
+                            <option value="QUERY">QUERY</option>
+                            <option value="SECURITY">SECURITY</option>
+                        </select>
+                        <input type="text" placeholder="Buscar por API Key ou ação..." id="audit-search" class="form-input" style="padding: 8px 15px; font-size: 13px; width: 250px; margin-bottom: 0;" onkeyup="filterAuditLogs()">
+                        <button class="btn btn-sm" onclick="exportAudit('csv')"><i class="fas fa-file-csv"></i> CSV</button>
+                        <button class="btn btn-sm" onclick="exportAudit('json')"><i class="fas fa-file-code"></i> JSON</button>
                     </div>
                 </div>
                 <div class="card">
@@ -396,15 +404,33 @@
 
             <!-- Endpoints Section -->
             <div id="section-endpoints" class="content-section">
-                <div class="header"><h2>Gerenciamento de Endpoints</h2></div>
+                <div class="header">
+                    <h2>Gerenciamento de Endpoints</h2>
+                    <input type="text" placeholder="Buscar endpoint..." class="form-input" style="padding: 8px 15px; font-size: 13px; width: 250px; margin-bottom: 0;" onkeyup="filterTable('endpoints-table', this.value)">
+                </div>
+                
+                <div class="charts-grid" style="margin-bottom: 20px;">
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-chart-line"></i> Performance de Endpoints (Latência Média)</div>
+                        <div id="endpointsPerformanceChart"></div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title"><i class="fas fa-tachometer-alt"></i> Taxa de Requisições (Última Hora)</div>
+                        <div id="endpointsRequestsChart"></div>
+                    </div>
+                </div>
+                
                 <div class="card">
                     <table id="endpoints-table">
                         <thead>
                             <tr>
+                                <th>Status</th>
                                 <th>Nome</th>
                                 <th>ID</th>
-                                <th>Total Requests</th>
-                                <th>Status</th>
+                                <th>Requests</th>
+                                <th>Latência</th>
+                                <th>Taxa Erro</th>
+                                <th>Último Uso</th>
                                 <th>Manutenção</th>
                                 <th>Ações</th>
                             </tr>
@@ -426,6 +452,14 @@
                         <div class="stat-label">Uso Total (Free)</div>
                         <div class="stat-value" id="ms-usage">0</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Endpoints Ativos</div>
+                        <div class="stat-value" id="ms-active-endpoints">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Latência Média</div>
+                        <div class="stat-value" id="ms-avg-latency">0ms</div>
+                    </div>
                 </div>
                 <div class="charts-grid">
                     <div class="card">
@@ -433,11 +467,31 @@
                         <div id="msChart"></div>
                     </div>
                     <div class="card">
-                        <div class="card-title"><i class="fas fa-toggle-on"></i> Controles Rápidos</div>
-                        <div class="form-group">
-                            <label class="input-label">Sistema Free</label>
-                            <button class="btn btn-primary" id="btn-toggle-ms" onclick="toggleMiniService()">Desativar Sistema</button>
-                        </div>
+                        <div class="card-title"><i class="fas fa-chart-pie"></i> Distribuição de Carga</div>
+                        <div id="msLoadChart"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-table"></i> Detalhes por Endpoint</div>
+                    <table id="ms-endpoints-table">
+                        <thead>
+                            <tr>
+                                <th>Endpoint</th>
+                                <th>Hits</th>
+                                <th>Latência Média</th>
+                                <th>Status</th>
+                                <th>Taxa de Erro</th>
+                                <th>Último Uso</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-toggle-on"></i> Controles Rápidos</div>
+                    <div class="form-group">
+                        <label class="input-label">Sistema Free</label>
+                        <button class="btn btn-primary" id="btn-toggle-ms" onclick="toggleMiniService()">Desativar Sistema</button>
                     </div>
                 </div>
             </div>
@@ -778,6 +832,60 @@
                 <button class="btn btn-primary" id="btn-run-test" onclick="runEndpointTest()"><i class="fas fa-play"></i> Executar Teste</button>
                 <button class="btn btn-success" id="btn-deploy-ep" style="display: none;" onclick="deployEndpoint()"><i class="fas fa-cloud-upload-alt"></i> Adicionar Endpoint</button>
                 <button class="btn" onclick="closeModal('test-ep-modal')">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Endpoint Detail Modal -->
+    <div id="endpoint-detail-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h3 style="margin-bottom: 20px;"><i class="fas fa-info-circle"></i> Detalhes do Endpoint: <span id="ep-detail-name"></span></h3>
+            
+            <div class="stats-grid" style="margin-bottom: 20px;">
+                <div class="stat-card">
+                    <div class="stat-label">Total de Requisições</div>
+                    <div class="stat-value" id="ep-detail-requests">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Latência Média</div>
+                    <div class="stat-value" id="ep-detail-latency">0ms</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Taxa de Erro</div>
+                    <div class="stat-value" id="ep-detail-error-rate">0%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Último Uso</div>
+                    <div class="stat-value" id="ep-detail-last-used" style="font-size: 14px;">N/A</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title"><i class="fas fa-chart-line"></i> Histórico de Requisições (24h)</div>
+                <div id="endpointDetailChart"></div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="testEndpointDirect()"><i class="fas fa-play"></i> Testar Agora</button>
+                <button class="btn" onclick="closeModal('endpoint-detail-modal')">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Endpoint Direct Modal -->
+    <div id="test-endpoint-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h3 style="margin-bottom: 20px;"><i class="fas fa-flask"></i> Testar Endpoint: <span id="test-ep-name"></span></h3>
+            <div id="test-endpoint-params-container">
+                <!-- Dynamic params will be added here -->
+            </div>
+            <div style="margin-top: 20px;">
+                <label class="input-label">Resultado do Teste</label>
+                <pre id="test-endpoint-result" style="background: #0a0a0a; color: #00f2ff; padding: 15px; border-radius: 8px; max-height: 300px; overflow: auto;">Aguardando execução...</pre>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="executeEndpointTest()"><i class="fas fa-play"></i> Executar Teste</button>
+                <button class="btn" onclick="closeModal('test-endpoint-modal')">Fechar</button>
             </div>
         </div>
     </div>

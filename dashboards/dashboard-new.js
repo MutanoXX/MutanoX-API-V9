@@ -85,6 +85,11 @@ function initWebSocket() {
                 updateCharts(data);
                 updateHealth(data.health);
                 
+                // Update endpoint stats in real-time if on endpoints section
+                if (document.getElementById('section-endpoints').classList.contains('active') && data.endpointStats) {
+                    updateEndpointStatsRealtime(data.endpointStats);
+                }
+                
                 // Se estiver na seção de keys, atualiza a tabela se houver mudanças
                 if (document.getElementById('section-keys').classList.contains('active')) {
                     updateKeysTable(data.keys);
@@ -197,6 +202,9 @@ function initCharts() {
     const mainEl = document.querySelector("#mainChart");
     const deviceEl = document.querySelector("#deviceChart");
     const msEl = document.querySelector("#msChart");
+    const msLoadEl = document.querySelector("#msLoadChart");
+    const epPerformanceEl = document.querySelector("#endpointsPerformanceChart");
+    const epRequestsEl = document.querySelector("#endpointsRequestsChart");
 
     if (mainEl) {
         charts.main = new ApexCharts(mainEl, {
@@ -238,6 +246,42 @@ function initCharts() {
             theme: { mode: 'dark' }
         });
         charts.ms.render();
+    }
+
+    if (msLoadEl) {
+        charts.msLoad = new ApexCharts(msLoadEl, {
+            series: [],
+            chart: { height: 300, type: 'pie' },
+            labels: [],
+            colors: ['#00f2ff', '#7000ff', '#ff00c8', '#ffcc00', '#00ff9d'],
+            legend: { position: 'bottom', labels: { colors: '#a0a0a0' } },
+            theme: { mode: 'dark' }
+        });
+        charts.msLoad.render();
+    }
+
+    if (epPerformanceEl) {
+        charts.epPerformance = new ApexCharts(epPerformanceEl, {
+            series: [{ name: 'Latência (ms)', data: [] }],
+            chart: { height: 300, type: 'bar', background: 'transparent' },
+            colors: ['#00f2ff'],
+            xaxis: { categories: [], labels: { style: { colors: '#a0a0a0' } } },
+            yaxis: { labels: { style: { colors: '#a0a0a0' } } },
+            theme: { mode: 'dark' }
+        });
+        charts.epPerformance.render();
+    }
+
+    if (epRequestsEl) {
+        charts.epRequests = new ApexCharts(epRequestsEl, {
+            series: [{ name: 'Requisições', data: [] }],
+            chart: { height: 300, type: 'bar', background: 'transparent' },
+            colors: ['#7000ff'],
+            xaxis: { categories: [], labels: { style: { colors: '#a0a0a0' } } },
+            yaxis: { labels: { style: { colors: '#a0a0a0' } } },
+            theme: { mode: 'dark' }
+        });
+        charts.epRequests.render();
     }
 }
 
@@ -282,6 +326,52 @@ function updateHealth(health) {
             <div style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">Latência: ${h.latency}ms</div>
         </div>
     `).join('');
+}
+
+function updateEndpointStatsRealtime(endpointStats) {
+    // Update table rows with real-time data without full reload
+    const tbody = document.querySelector('#endpoints-table tbody');
+    if (!tbody) return;
+    
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+        const idCell = row.querySelector('td:nth-child(3) strong');
+        if (!idCell) return;
+        
+        const endpointId = idCell.textContent;
+        const stats = endpointStats[endpointId];
+        
+        if (stats) {
+            // Update latency cell
+            const latencyCell = row.querySelector('td:nth-child(5)');
+            if (latencyCell) latencyCell.textContent = stats.avgLatency + 'ms';
+            
+            // Update error rate cell
+            const errorCell = row.querySelector('td:nth-child(6)');
+            if (errorCell) {
+                const badge = errorCell.querySelector('.badge');
+                if (badge) {
+                    badge.textContent = stats.errorRate + '%';
+                    badge.className = `badge ${stats.errorRate > 10 ? 'badge-danger' : 'badge-success'}`;
+                }
+            }
+            
+            // Update last used
+            const lastUsedCell = row.querySelector('td:nth-child(7)');
+            if (lastUsedCell && stats.lastUsed) {
+                lastUsedCell.textContent = new Date(stats.lastUsed).toLocaleString('pt-BR');
+            }
+            
+            // Update status indicator
+            const statusIndicator = row.querySelector('td:first-child span');
+            if (statusIndicator) {
+                let color = '#00ff9d'; // healthy
+                if (stats.errorRate > 10) color = '#ff4d4d'; // error
+                else if (stats.avgLatency > 2000) color = '#ffcc00'; // slow
+                statusIndicator.style.background = color;
+            }
+        }
+    });
 }
 
 async function loadKeys() {
@@ -403,22 +493,57 @@ async function saveKeyEdit() {
     } catch (e) { alert('Erro ao salvar'); }
 }
 
+let auditLogsCache = [];
+
 async function loadAuditLogs() {
     try {
         const res = await fetch(`/api/admin/audit?apikey=${adminKey}`);
-        const logs = await res.json();
-        const tbody = document.querySelector('#audit-table tbody');
-        if (!tbody) return;
-        tbody.innerHTML = logs.slice(0, 100).map(log => `
+        auditLogsCache = await res.json();
+        displayAuditLogs(auditLogsCache);
+    } catch (e) { console.error('Erro ao carregar logs:', e); }
+}
+
+function displayAuditLogs(logs) {
+    const tbody = document.querySelector('#audit-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = logs.slice(0, 100).map(log => {
+        const badgeClass = log.type === 'ADMIN' ? 'badge-warning' : log.type === 'SECURITY' ? 'badge-danger' : 'badge-success';
+        return `
             <tr>
                 <td style="font-size: 11px; color: var(--text-muted);">${new Date(log.timestamp).toLocaleString()}</td>
-                <td style="font-family: monospace;">${log.apiKey}</td>
-                <td><span class="badge ${log.type === 'ADMIN' ? 'badge-warning' : 'badge-success'}">${log.type}</span></td>
+                <td style="font-family: monospace; font-size: 11px;">${log.apiKey}</td>
+                <td><span class="badge ${badgeClass}">${log.type}</span></td>
                 <td>${log.action}</td>
                 <td style="font-size: 12px; color: var(--text-muted);">${log.details}</td>
             </tr>
-        `).join('');
-    } catch (e) { console.error('Erro ao carregar logs:', e); }
+        `;
+    }).join('');
+}
+
+function filterAuditByType(type) {
+    if (!type) {
+        displayAuditLogs(auditLogsCache);
+    } else {
+        const filtered = auditLogsCache.filter(log => log.type === type);
+        displayAuditLogs(filtered);
+    }
+}
+
+function filterAuditLogs() {
+    const searchTerm = document.getElementById('audit-search').value.toLowerCase();
+    if (!searchTerm) {
+        displayAuditLogs(auditLogsCache);
+        return;
+    }
+    
+    const filtered = auditLogsCache.filter(log => {
+        return log.apiKey.toLowerCase().includes(searchTerm) ||
+               log.action.toLowerCase().includes(searchTerm) ||
+               log.details.toLowerCase().includes(searchTerm) ||
+               log.type.toLowerCase().includes(searchTerm);
+    });
+    
+    displayAuditLogs(filtered);
 }
 
 async function addSingleProtection() {
@@ -550,24 +675,68 @@ async function loadEndpoints() {
         const data = await res.json();
         if (data.success) {
             const tbody = document.querySelector('#endpoints-table tbody');
-            tbody.innerHTML = Object.entries(data.endpoints).map(([id, config]) => `
-                <tr>
-                    <td>${config.name || id}</td>
-                    <td><strong>${id}</strong> ${config.dynamic ? '<i class="fas fa-code" title="Dinâmico" style="color: var(--primary); font-size: 10px;"></i>' : ''}</td>
-                    <td>${data.stats[id] || 0}</td>
-                    <td><span class="badge ${config.active ? 'badge-success' : 'badge-danger'}">${config.active ? 'ATIVO' : 'INATIVO'}</span></td>
-                    <td><span class="badge ${config.maintenance ? 'badge-warning' : 'badge-success'}">${config.maintenance ? 'MANUTENÇÃO' : 'NORMAL'}</span></td>
-                    <td>
-                        <div style="display: flex; gap: 5px;">
-                            <button class="btn btn-sm" onclick="toggleEndpoint('${id}', 'active', ${!config.active})">${config.active ? 'Desativar' : 'Ativar'}</button>
-                            <button class="btn btn-sm" onclick="toggleEndpoint('${id}', 'maintenance', ${!config.maintenance})">${config.maintenance ? 'Finalizar Manut.' : 'Manutenção'}</button>
-                            ${config.dynamic ? `<button class="btn btn-sm" style="background: var(--secondary);" onclick="openEndpointEditor('${id}')"><i class="fas fa-edit"></i></button>` : ''}
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+            
+            // Build performance charts data
+            const performanceData = [];
+            const requestsData = [];
+            const labels = [];
+            
+            const entries = Object.entries(data.endpoints);
+            
+            tbody.innerHTML = entries.map(([id, config]) => {
+                const stats = config.stats || {};
+                const status = getEndpointStatus(stats);
+                
+                // Add to chart data
+                labels.push(config.name || id);
+                performanceData.push(stats.avgLatency || 0);
+                requestsData.push(stats.requestsLastHour || 0);
+                
+                const lastUsedText = stats.lastUsed ? new Date(stats.lastUsed).toLocaleString('pt-BR') : 'Nunca';
+                
+                return `
+                    <tr>
+                        <td>
+                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${status.color};" title="${status.text}"></span>
+                        </td>
+                        <td>${config.name || id}</td>
+                        <td><strong>${id}</strong> ${config.dynamic ? '<i class="fas fa-code" title="Dinâmico" style="color: var(--primary); font-size: 10px;"></i>' : ''}</td>
+                        <td>${stats.totalRequests || 0}</td>
+                        <td>${stats.avgLatency || 0}ms</td>
+                        <td><span class="badge ${stats.errorRate > 10 ? 'badge-danger' : 'badge-success'}">${stats.errorRate || 0}%</span></td>
+                        <td style="font-size: 11px;">${lastUsedText}</td>
+                        <td><span class="badge ${config.maintenance ? 'badge-warning' : 'badge-success'}">${config.maintenance ? 'MANUTENÇÃO' : 'NORMAL'}</span></td>
+                        <td>
+                            <div style="display: flex; gap: 5px;">
+                                <button class="btn btn-sm" onclick="openEndpointDetail('${id}')" title="Ver Detalhes"><i class="fas fa-chart-line"></i></button>
+                                <button class="btn btn-sm" onclick="openTestEndpoint('${id}')" title="Testar"><i class="fas fa-play"></i></button>
+                                <button class="btn btn-sm" onclick="toggleEndpoint('${id}', 'active', ${!config.active})">${config.active ? '<i class="fas fa-power-off"></i>' : '<i class="fas fa-power-off"></i>'}</button>
+                                ${config.dynamic ? `<button class="btn btn-sm" style="background: var(--secondary);" onclick="openEndpointEditor('${id}')"><i class="fas fa-edit"></i></button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Update performance charts
+            if (charts.epPerformance) {
+                charts.epPerformance.updateOptions({ xaxis: { categories: labels } });
+                charts.epPerformance.updateSeries([{ data: performanceData }]);
+            }
+            
+            if (charts.epRequests) {
+                charts.epRequests.updateOptions({ xaxis: { categories: labels } });
+                charts.epRequests.updateSeries([{ data: requestsData }]);
+            }
         }
-    } catch (e) {}
+    } catch (e) { console.error('Error loading endpoints:', e); }
+}
+
+function getEndpointStatus(stats) {
+    if (!stats.totalRequests) return { color: '#8a8aa3', text: 'Sem uso' };
+    if (stats.errorRate > 10) return { color: '#ff4d4d', text: 'Erro' };
+    if (stats.avgLatency > 2000) return { color: '#ffcc00', text: 'Lento' };
+    return { color: '#00ff9d', text: 'Saudável' };
 }
 
 async function openEndpointEditor(name) {
@@ -594,23 +763,176 @@ async function toggleEndpoint(id, field, value) {
     } catch (e) { alert('Erro ao atualizar endpoint'); }
 }
 
-async function loadMiniService() {
+async function openEndpointDetail(endpointId) {
     try {
-        const res = await fetch(`/api/admin/stats?apikey=${adminKey}`);
+        const res = await fetch(`/api/admin/endpoints/stats/${endpointId}?apikey=${adminKey}`);
         const data = await res.json();
         if (data.success) {
-            document.getElementById('ms-status').innerText = data.config.active ? 'Ativo' : 'Inativo';
-            document.getElementById('ms-usage').innerText = data.config.usageCount || 0;
-            document.getElementById('btn-toggle-ms').innerText = data.config.active ? 'Desativar Sistema' : 'Ativar Sistema';
+            document.getElementById('ep-detail-name').innerText = endpointId;
+            document.getElementById('ep-detail-requests').innerText = data.totalRequests;
+            document.getElementById('ep-detail-latency').innerText = data.avgLatency + 'ms';
+            document.getElementById('ep-detail-error-rate').innerText = (data.totalErrors > 0 ? ((data.totalErrors / data.totalRequests) * 100).toFixed(2) : 0) + '%';
+            document.getElementById('ep-detail-last-used').innerText = data.lastUsed ? new Date(data.lastUsed).toLocaleString('pt-BR') : 'N/A';
             
+            // Create chart for hourly stats
+            const chartEl = document.getElementById('endpointDetailChart');
+            if (chartEl) {
+                const detailChart = new ApexCharts(chartEl, {
+                    series: [{ name: 'Requisições', data: data.hourlyStats.map(h => h.requests) }],
+                    chart: { height: 300, type: 'line', background: 'transparent' },
+                    colors: ['#00f2ff'],
+                    stroke: { curve: 'smooth', width: 3 },
+                    xaxis: { categories: data.hourlyStats.map(h => h.hour), labels: { style: { colors: '#a0a0a0' } } },
+                    yaxis: { labels: { style: { colors: '#a0a0a0' } } },
+                    theme: { mode: 'dark' }
+                });
+                chartEl.innerHTML = '';
+                detailChart.render();
+            }
+            
+            document.getElementById('endpoint-detail-modal').style.display = 'flex';
+        }
+    } catch (e) { showNotification('Erro ao carregar detalhes', 'error'); }
+}
+
+let currentTestEndpoint = null;
+
+async function openTestEndpoint(endpointId) {
+    currentTestEndpoint = endpointId;
+    document.getElementById('test-ep-name').innerText = endpointId;
+    
+    // Get endpoint config to know what params it needs
+    const res = await fetch(`/api/admin/endpoints/list?apikey=${adminKey}`);
+    const data = await res.json();
+    const config = data.endpoints[endpointId];
+    
+    const paramsContainer = document.getElementById('test-endpoint-params-container');
+    paramsContainer.innerHTML = '<h4>Parâmetros do Teste</h4>';
+    
+    // Common params based on endpoint type
+    const commonParams = {
+        cpf: ['cpf'],
+        nome: ['q'],
+        numero: ['q'],
+        bypasscf: ['url', 'siteKey'],
+        infoff: ['id'],
+        downloader: ['url'],
+        github: ['username'],
+        gimage: ['query'],
+        pinterest: ['query'],
+        roblox: ['username'],
+        tiktok: ['username'],
+        yt: ['query'],
+        video: ['prompt', 'quality', 'ratio'],
+        nsfw: ['prompt', 'negative']
+    };
+    
+    const params = config.params || commonParams[endpointId] || ['q'];
+    
+    params.forEach(p => {
+        paramsContainer.innerHTML += `
+            <div class="form-group">
+                <label class="input-label">${p}</label>
+                <input type="text" class="form-input test-endpoint-param" data-param="${p}" placeholder="Valor para ${p}">
+            </div>
+        `;
+    });
+    
+    document.getElementById('test-endpoint-result').innerText = 'Aguardando execução...';
+    document.getElementById('test-endpoint-modal').style.display = 'flex';
+}
+
+async function executeEndpointTest() {
+    const paramInputs = document.querySelectorAll('.test-endpoint-param');
+    const params = {};
+    paramInputs.forEach(input => {
+        params[input.getAttribute('data-param')] = input.value;
+    });
+    
+    document.getElementById('test-endpoint-result').innerText = 'Executando teste...';
+    
+    try {
+        const res = await fetch(`/api/admin/endpoints/test-endpoint?apikey=${adminKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpointId: currentTestEndpoint, params })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            document.getElementById('test-endpoint-result').innerText = JSON.stringify(data.result, null, 2);
+            showNotification(`Teste concluído em ${data.result.latency}ms`, 'success');
+        } else {
+            document.getElementById('test-endpoint-result').innerText = 'Erro: ' + (data.error || 'Falha no teste');
+            showNotification('Erro no teste', 'error');
+        }
+    } catch (e) {
+        document.getElementById('test-endpoint-result').innerText = 'Erro na requisição: ' + e.message;
+        showNotification('Erro ao executar teste', 'error');
+    }
+}
+
+function testEndpointDirect() {
+    // Close detail modal and open test modal with current endpoint
+    const endpointId = document.getElementById('ep-detail-name').innerText;
+    closeModal('endpoint-detail-modal');
+    openTestEndpoint(endpointId);
+}
+
+async function loadMiniService() {
+    try {
+        const res = await fetch(`/api/admin/miniservice/endpoints-detail?apikey=${adminKey}`);
+        const data = await res.json();
+        
+        if (data.success) {
+            // Update stats cards
+            const statsRes = await fetch(`/api/admin/stats?apikey=${adminKey}`);
+            const statsData = await statsRes.json();
+            
+            document.getElementById('ms-status').innerText = statsData.config.active ? 'Ativo' : 'Inativo';
+            document.getElementById('ms-usage').innerText = data.totalUsage || 0;
+            document.getElementById('ms-active-endpoints').innerText = data.endpoints.filter(e => e.hits > 0).length;
+            
+            const avgLatency = data.endpoints.reduce((sum, e) => sum + e.avgLatency, 0) / data.endpoints.length;
+            document.getElementById('ms-avg-latency').innerText = Math.round(avgLatency) + 'ms';
+            
+            document.getElementById('btn-toggle-ms').innerText = statsData.config.active ? 'Desativar Sistema' : 'Ativar Sistema';
+            
+            // Update table
+            const tbody = document.querySelector('#ms-endpoints-table tbody');
+            tbody.innerHTML = data.endpoints.map(ep => {
+                const statusBadge = ep.status === 'healthy' ? 'badge-success' : ep.status === 'slow' ? 'badge-warning' : 'badge-danger';
+                const lastUsed = ep.lastUsed ? new Date(ep.lastUsed).toLocaleString('pt-BR') : 'Nunca';
+                
+                return `
+                    <tr>
+                        <td>${ep.name}</td>
+                        <td>${ep.hits}</td>
+                        <td>${ep.avgLatency}ms</td>
+                        <td><span class="badge ${statusBadge}">${ep.status.toUpperCase()}</span></td>
+                        <td>${ep.errorRate}%</td>
+                        <td style="font-size: 11px;">${lastUsed}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Update bar chart
             if (charts.ms) {
-                const categories = Object.keys(data.endpointHits);
-                const values = Object.values(data.endpointHits);
-                charts.ms.updateOptions({ xaxis: { categories: categories } });
+                const categories = data.endpoints.map(e => e.name);
+                const values = data.endpoints.map(e => e.hits);
+                charts.ms.updateOptions({ xaxis: { categories } });
                 charts.ms.updateSeries([{ data: values }]);
             }
+            
+            // Update pie chart for load distribution
+            if (charts.msLoad) {
+                const labels = data.endpoints.slice(0, 5).map(e => e.name);
+                const series = data.endpoints.slice(0, 5).map(e => e.hits);
+                charts.msLoad.updateOptions({ labels });
+                charts.msLoad.updateSeries(series);
+            }
         }
-    } catch (e) {}
+    } catch (e) { console.error('Error loading mini service:', e); }
 }
 
 async function toggleMiniService() {

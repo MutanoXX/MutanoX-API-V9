@@ -124,6 +124,8 @@ function saveEndpointsConfig() {
     fs.writeFileSync(ENDPOINTS_FILE, JSON.stringify(endpointsConfig, null, 2));
 }
 
+loadEndpointsConfig();
+
 function updateAutoDocs() {
     const docsPath = pathModule.join(__dirname, 'docs', 'api-documentation.js');
     let docsContent = `// MutanoX Auto-Generated Documentation\nconst API_DOCS = {\n    version: "10.0",\n    lastUpdate: "${new Date().toISOString()}",\n    endpoints: {\n`;
@@ -145,7 +147,11 @@ let systemStats = {
     totalRequests: 0,
     endpointHits: {},
     errors: 0,
-    deviceHits: { desktop: 0, mobile: 0, tablet: 0 }
+    deviceHits: { desktop: 0, mobile: 0, tablet: 0 },
+    endpointLatency: {},
+    endpointErrors: {},
+    endpointLastUsed: {},
+    endpointRequestTimeline: {}
 };
 
 // --- FIREWALL & WAF ---
@@ -225,6 +231,10 @@ function loadStats() {
             systemStats.endpointHits = stats.endpointHits || {};
             systemStats.errors = stats.errors || 0;
             systemStats.deviceHits = stats.deviceHits || { desktop: 0, mobile: 0, tablet: 0 };
+            systemStats.endpointLatency = stats.endpointLatency || {};
+            systemStats.endpointErrors = stats.endpointErrors || {};
+            systemStats.endpointLastUsed = stats.endpointLastUsed || {};
+            systemStats.endpointRequestTimeline = stats.endpointRequestTimeline || {};
         } catch (error) {}
     }
 }
@@ -668,8 +678,149 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ success: true, key: newKey }));
             });
         } else if (path === '/api/admin/endpoints/list') {
+            const enrichedEndpoints = {};
+            for (const [id, config] of Object.entries(endpointsConfig)) {
+                const hits = systemStats.endpointHits[id] || 0;
+                const errors = systemStats.endpointErrors[id] || 0;
+                const latencies = systemStats.endpointLatency[id] || [];
+                const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+                const lastUsed = systemStats.endpointLastUsed[id] || null;
+                const errorRate = hits > 0 ? ((errors / hits) * 100).toFixed(2) : 0;
+                
+                // Calculate requests in last hour/day
+                const now = Date.now();
+                const timeline = systemStats.endpointRequestTimeline[id] || [];
+                const requestsLastHour = timeline.filter(ts => now - ts < 3600000).length;
+                const requestsLastDay = timeline.filter(ts => now - ts < 86400000).length;
+                
+                enrichedEndpoints[id] = {
+                    ...config,
+                    stats: {
+                        totalRequests: hits,
+                        totalErrors: errors,
+                        avgLatency,
+                        lastUsed,
+                        errorRate: parseFloat(errorRate),
+                        requestsLastHour,
+                        requestsLastDay
+                    }
+                };
+            }
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, endpoints: endpointsConfig, stats: systemStats.endpointHits }));
+            res.end(JSON.stringify({ success: true, endpoints: enrichedEndpoints, stats: systemStats.endpointHits }));
+        } else if (path.startsWith('/api/admin/endpoints/stats/')) {
+            const endpointId = path.split('/').pop();
+            const timeline = systemStats.endpointRequestTimeline[endpointId] || [];
+            const latencies = systemStats.endpointLatency[endpointId] || [];
+            const errors = systemStats.endpointErrors[endpointId] || 0;
+            const hits = systemStats.endpointHits[endpointId] || 0;
+            
+            // Build hourly stats for last 24 hours
+            const now = Date.now();
+            const hourlyStats = [];
+            for (let i = 23; i >= 0; i--) {
+                const hourStart = now - (i * 3600000);
+                const hourEnd = hourStart + 3600000;
+                const count = timeline.filter(ts => ts >= hourStart && ts < hourEnd).length;
+                hourlyStats.push({
+                    hour: new Date(hourStart).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    requests: count
+                });
+            }
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                endpointId,
+                totalRequests: hits,
+                totalErrors: errors,
+                avgLatency: latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
+                lastUsed: systemStats.endpointLastUsed[endpointId] || null,
+                hourlyStats,
+                recentLatencies: latencies.slice(-20)
+            }));
+        } else if (path === '/api/admin/endpoints/test-endpoint' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', async () => {
+                try {
+                    const { endpointId, params } = JSON.parse(body);
+                    if (!endpointsConfig[endpointId]) {
+                        res.writeHead(404, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: 'Endpoint not found' }));
+                        return;
+                    }
+                    
+                    // Create a mock request to test the endpoint
+                    const testQuery = new URLSearchParams(params).toString();
+                    const testUrl = `/api/consultas?tipo=${endpointId}&${testQuery}&apikey=${ADMIN_KEY}`;
+                    const startTime = Date.now();
+                    
+                    // Simulate internal test call
+                    const mockReq = { headers: { 'user-agent': 'Admin-Test' } };
+                    const testResult = { logs: [], response: null, latency: 0 };
+                    
+                    try {
+                        // Direct call to handler
+                        let result;
+                        const query = { ...params, tipo: endpointId };
+                        
+                        if (endpointsConfig[endpointId].dynamic) {
+                            const epPath = pathModule.join(__dirname, 'endpoints', `${endpointId}.js`);
+                            if (fs.existsSync(epPath)) {
+                                const code = fs.readFileSync(epPath, 'utf8');
+                                const epFn = new Function('query', 'fetch', `return (async () => { ${code} })();`);
+                                result = await epFn(params, fetch);
+                            }
+                        }
+                        
+                        testResult.response = result || { message: 'Test executed - check endpoint implementation' };
+                        testResult.latency = Date.now() - startTime;
+                        testResult.success = true;
+                    } catch (e) {
+                        testResult.response = { error: e.message };
+                        testResult.success = false;
+                        testResult.latency = Date.now() - startTime;
+                    }
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, result: testResult }));
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: e.message }));
+                }
+            });
+        } else if (path === '/api/admin/miniservice/endpoints-detail') {
+            const endpointDetails = [];
+            for (const [id, config] of Object.entries(endpointsConfig)) {
+                const hits = systemStats.endpointHits[id] || 0;
+                const latencies = systemStats.endpointLatency[id] || [];
+                const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+                const errors = systemStats.endpointErrors[id] || 0;
+                
+                let status = 'healthy';
+                if (errors > hits * 0.1) status = 'error';
+                else if (avgLatency > 2000) status = 'slow';
+                
+                endpointDetails.push({
+                    id,
+                    name: config.name || id,
+                    hits,
+                    avgLatency,
+                    status,
+                    lastUsed: systemStats.endpointLastUsed[id] || null,
+                    errorRate: hits > 0 ? ((errors / hits) * 100).toFixed(2) : 0
+                });
+            }
+            
+            endpointDetails.sort((a, b) => b.hits - a.hits);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                endpoints: endpointDetails,
+                totalUsage: systemStats.totalRequests
+            }));
         } else if (path === '/api/admin/endpoints/update' && req.method === 'POST') {
             let body = '';
             req.on('data', chunk => body += chunk);
@@ -1007,7 +1158,18 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function handleApiRequest(req, res, tipo, query, apiKey) {
+    const startTime = Date.now();
     systemStats.endpointHits[tipo] = (systemStats.endpointHits[tipo] || 0) + 1;
+    systemStats.endpointLastUsed[tipo] = new Date().toISOString();
+    
+    // Track request timeline
+    if (!systemStats.endpointRequestTimeline[tipo]) systemStats.endpointRequestTimeline[tipo] = [];
+    systemStats.endpointRequestTimeline[tipo].push(Date.now());
+    // Keep only last 1000 requests per endpoint to prevent memory issues
+    if (systemStats.endpointRequestTimeline[tipo].length > 1000) {
+        systemStats.endpointRequestTimeline[tipo] = systemStats.endpointRequestTimeline[tipo].slice(-1000);
+    }
+    
     saveStats();
     auditLog(apiKey, 'QUERY', tipo, `Query: ${query.q || query.cpf || query.id}`);
 
@@ -1015,6 +1177,11 @@ async function handleApiRequest(req, res, tipo, query, apiKey) {
     const cacheKey = `${tipo}:${JSON.stringify(query)}`;
     const cachedData = getCache(cacheKey);
     if (cachedData) {
+        const latency = Date.now() - startTime;
+        if (!systemStats.endpointLatency[tipo]) systemStats.endpointLatency[tipo] = [];
+        systemStats.endpointLatency[tipo].push(latency);
+        if (systemStats.endpointLatency[tipo].length > 100) systemStats.endpointLatency[tipo].shift();
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ...cachedData, cached: true }));
         return;
@@ -1064,10 +1231,23 @@ async function handleApiRequest(req, res, tipo, query, apiKey) {
         }
 
         if (result.sucesso) setCache(cacheKey, result);
+        
+        // Track latency
+        const latency = Date.now() - startTime;
+        if (!systemStats.endpointLatency[tipo]) systemStats.endpointLatency[tipo] = [];
+        systemStats.endpointLatency[tipo].push(latency);
+        if (systemStats.endpointLatency[tipo].length > 100) systemStats.endpointLatency[tipo].shift();
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
     } catch (e) {
-        systemStats.errors++; saveStats();
+        systemStats.errors++;
+        
+        // Track endpoint-specific errors
+        if (!systemStats.endpointErrors[tipo]) systemStats.endpointErrors[tipo] = 0;
+        systemStats.endpointErrors[tipo]++;
+        
+        saveStats();
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ sucesso: false, erro: e.message }));
     }
@@ -1105,12 +1285,31 @@ setInterval(() => {
 setInterval(async () => {
     const health = await checkExternalHealth();
     const keys = loadApiKeys();
+    
+    // Build endpoint stats for broadcast
+    const endpointStats = {};
+    for (const [id, config] of Object.entries(endpointsConfig)) {
+        const hits = systemStats.endpointHits[id] || 0;
+        const errors = systemStats.endpointErrors[id] || 0;
+        const latencies = systemStats.endpointLatency[id] || [];
+        const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+        
+        endpointStats[id] = {
+            hits,
+            errors,
+            avgLatency,
+            errorRate: hits > 0 ? ((errors / hits) * 100).toFixed(2) : 0,
+            lastUsed: systemStats.endpointLastUsed[id] || null
+        };
+    }
+    
     broadcast({
         type: 'STATS_UPDATE',
         totalRequests: systemStats.totalRequests,
         errors: systemStats.errors,
         uptime: Date.now() - systemStats.startTime,
         endpointHits: systemStats.endpointHits,
+        endpointStats: endpointStats,
         deviceHits: systemStats.deviceHits,
         health: health,
         keys: keys
