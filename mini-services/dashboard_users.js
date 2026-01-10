@@ -226,6 +226,12 @@ function initWebSocket() {
     const host = window.location.host || 'localhost:8080';
     socket = new WebSocket(`${protocol}//${host}`);
 
+    socket.onopen = () => {
+        try {
+            if (userApiKey) socket.send(JSON.stringify({ type: 'AUTH', apiKey: userApiKey }));
+        } catch (e) {}
+    };
+
     socket.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
@@ -254,6 +260,11 @@ function initWebSocket() {
 
                 if (data.endpointHits) {
                     userData.endpointHits = data.endpointHits;
+                }
+                if (data.endpointStats) {
+                    userData.endpointStats = data.endpointStats;
+                }
+                if (data.endpointHits || data.endpointStats) {
                     updateEndpointTable();
                 }
             }
@@ -309,16 +320,27 @@ function updateEndpointTable() {
     const total = Object.values(userData.endpointHits).reduce((a, b) => a + b, 0);
 
     Object.entries(userData.endpointHits).forEach(([endpoint, count]) => {
-        const latencies = systemStats?.endpointLatency?.[endpoint] || [];
-        const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
-        const successRate = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+        const stats = userData.endpointStats ? userData.endpointStats[endpoint] : null;
+        const avgLatency = stats && stats.avgLatency ? stats.avgLatency : 0;
+        const errorRate = stats && stats.errorRate ? parseFloat(stats.errorRate) : 0;
+        const usagePercent = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+
+        let badgeClass = 'badge-success';
+        let statusLabel = 'OK';
+        if (errorRate > 10) {
+            badgeClass = 'badge-danger';
+            statusLabel = 'Instável';
+        } else if (avgLatency > 2000) {
+            badgeClass = 'badge-warning';
+            statusLabel = 'Lento';
+        }
 
         tbody.innerHTML += `
             <tr>
                 <td><strong>${endpoint}</strong></td>
-                <td>${count}</td>
+                <td>${count} <span style="color: var(--text-muted); font-size: 11px;">(${usagePercent}%)</span></td>
                 <td>${avgLatency}ms</td>
-                <td><span class="badge badge-success">Ativo</span></td>
+                <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
             </tr>
         `;
     });

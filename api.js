@@ -35,52 +35,184 @@ if (!fs.existsSync(PROTECTED_USERS_DIR)) {
 // Configuração Mini-Services e Customização
 const loginAttempts = new Map();
 
-let freeConfig = {
-    active: false,
-    message: "Sistema de Consultas Gratuitas",
-    protectionMessage: "esta pessoa está protegida pelo sistema, quer proteção? adquira proteção por 5R$ e tenha proteção eterna.",
-    maintenanceMessage: "Este endpoint está em manutenção temporária",
-    expiresAt: null,
-    usageCount: 0,
-    adBanner: "Anuncie aqui! @MutanoX",
-    adLink: "https://t.me/MutanoX",
-    primaryColor: "#00f2ff",
-    secondaryColor: "#7000ff",
-    showStatsWidget: true,
-    layoutType: "modern"
+const DEFAULT_MINI_SERVICES_CONFIG = {
+    services: {
+        consultas: {
+            active: true,
+            name: 'Consultas Gratuitas',
+            description: 'Busque por nome, telefone ou CPF',
+            types: ['nome', 'numero', 'cpf'],
+            theme: { primaryColor: '#00f2ff', secondaryColor: '#7000ff' },
+            welcomeMessage: 'Sistema de Consultas Gratuitas',
+            enabledFeatures: ['search', 'analytics'],
+            analyticsData: { totalAccess: 0, uniqueUsers: 0, averageTime: 0, lastUpdate: null }
+        },
+        dashboard_users: {
+            active: true,
+            name: 'Portal do Desenvolvedor',
+            description: 'Gerencie suas API Keys e estatísticas',
+            theme: { primaryColor: '#00f2ff', secondaryColor: '#7000ff' },
+            welcomeMessage: 'Bem-vindo ao Portal do Desenvolvedor',
+            enabledFeatures: ['stats', 'playground', 'webhooks', 'audit'],
+            analyticsData: { totalAccess: 0, uniqueUsers: 0, averageTime: 0, lastUpdate: null }
+        },
+        docs: {
+            active: true,
+            name: 'Documentação Interativa',
+            description: 'Documentação completa dos endpoints',
+            theme: { primaryColor: '#00f2ff', secondaryColor: '#7000ff' },
+            welcomeMessage: 'Explore nossa documentação',
+            enabledFeatures: ['testing', 'examples'],
+            analyticsData: { totalAccess: 0, uniqueUsers: 0, averageTime: 0, lastUpdate: null }
+        }
+    },
+    global: {
+        protectionMessage: 'esta pessoa está protegida pelo sistema, quer proteção? adquira proteção por 5R$ e tenha proteção eterna.',
+        maintenanceMessage: 'Este endpoint está em manutenção temporária',
+        adBanner: 'Anuncie aqui! @MutanoX',
+        adLink: 'https://t.me/MutanoX',
+        primaryColor: '#00f2ff',
+        secondaryColor: '#7000ff',
+        showStatsWidget: true,
+        layoutType: 'modern'
+    }
 };
 
-// Fila de Processamento para Mini Service
+let miniServicesConfig = JSON.parse(JSON.stringify(DEFAULT_MINI_SERVICES_CONFIG));
+
+// Legacy view (compatibilidade com o dashboard antigo)
+let freeConfig = {};
+
+function refreshFreeConfigView() {
+    const service = (miniServicesConfig.services && miniServicesConfig.services.consultas) ? miniServicesConfig.services.consultas : {};
+    const global = miniServicesConfig.global || {};
+
+    freeConfig = {
+        ...global,
+        ...service,
+        active: !!service.active,
+        message: service.welcomeMessage || 'Sistema de Consultas Gratuitas',
+        protectionMessage: global.protectionMessage,
+        maintenanceMessage: global.maintenanceMessage,
+        adBanner: global.adBanner,
+        adLink: global.adLink,
+        primaryColor: (service.theme && service.theme.primaryColor) || global.primaryColor,
+        secondaryColor: (service.theme && service.theme.secondaryColor) || global.secondaryColor,
+        showStatsWidget: global.showStatsWidget,
+        layoutType: global.layoutType
+    };
+}
+
+function loadMiniServicesConfig() {
+    if (fs.existsSync(MINI_SERVICES_CONFIG)) {
+        try {
+            const raw = JSON.parse(fs.readFileSync(MINI_SERVICES_CONFIG, 'utf8'));
+            // Aceita tanto o formato novo (services/global) quanto legado
+            if (raw && raw.services && raw.global) {
+                miniServicesConfig = { ...DEFAULT_MINI_SERVICES_CONFIG, ...raw, services: { ...DEFAULT_MINI_SERVICES_CONFIG.services, ...raw.services }, global: { ...DEFAULT_MINI_SERVICES_CONFIG.global, ...raw.global } };
+            } else {
+                // Formato antigo: tudo no root
+                miniServicesConfig = JSON.parse(JSON.stringify(DEFAULT_MINI_SERVICES_CONFIG));
+                miniServicesConfig.services.consultas.active = !!raw.active;
+                miniServicesConfig.services.consultas.welcomeMessage = raw.message || miniServicesConfig.services.consultas.welcomeMessage;
+                miniServicesConfig.global.protectionMessage = raw.protectionMessage || miniServicesConfig.global.protectionMessage;
+                miniServicesConfig.global.maintenanceMessage = raw.maintenanceMessage || miniServicesConfig.global.maintenanceMessage;
+                miniServicesConfig.global.adBanner = raw.adBanner || miniServicesConfig.global.adBanner;
+                miniServicesConfig.global.adLink = raw.adLink || miniServicesConfig.global.adLink;
+                miniServicesConfig.global.primaryColor = raw.primaryColor || miniServicesConfig.global.primaryColor;
+                miniServicesConfig.global.secondaryColor = raw.secondaryColor || miniServicesConfig.global.secondaryColor;
+                miniServicesConfig.global.showStatsWidget = raw.showStatsWidget !== false;
+                miniServicesConfig.global.layoutType = raw.layoutType || miniServicesConfig.global.layoutType;
+            }
+        } catch (e) {}
+    }
+
+    refreshFreeConfigView();
+}
+
+function saveMiniServicesConfig() {
+    fs.writeFileSync(MINI_SERVICES_CONFIG, JSON.stringify(miniServicesConfig, null, 2));
+    refreshFreeConfigView();
+}
+
+loadMiniServicesConfig();
+
+function getMiniServiceConfig(serviceId) {
+    return (miniServicesConfig.services && miniServicesConfig.services[serviceId]) ? miniServicesConfig.services[serviceId] : null;
+}
+
+// Fila de Processamento (mantida por compatibilidade)
 const requestQueue = [];
 let isProcessingQueue = false;
 
 async function processQueue() {
     if (isProcessingQueue || requestQueue.length === 0) return;
     isProcessingQueue = true;
-    
+
     while (requestQueue.length > 0) {
         const { req, res, tipo, query, apiKey } = requestQueue.shift();
         try {
             await handleApiRequest(req, res, tipo, query, apiKey);
         } catch (e) {
-            res.writeHead(500); res.end(JSON.stringify({ sucesso: false, erro: e.message }));
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ sucesso: false, erro: e.message }));
         }
-        // Delay para não sobrecarregar
         await new Promise(resolve => setTimeout(resolve, 500));
     }
-    
+
     isProcessingQueue = false;
 }
 
-function loadFreeConfig() {
-    if (fs.existsSync(MINI_SERVICES_CONFIG)) {
-        try {
-            freeConfig = { ...freeConfig, ...JSON.parse(fs.readFileSync(MINI_SERVICES_CONFIG, 'utf8')) };
-        } catch (e) {}
-    }
+// Mini-service sessions (tokens) - não expõem API keys no frontend
+const MINI_SERVICE_SESSION_TTL_MS = 1000 * 60 * 30; // 30min
+const miniServiceSessions = new Map(); // token -> { serviceId, createdAt, expiresAt, ip, ua }
+
+function createMiniServiceSession(serviceId, req) {
+    const token = 'MS_' + crypto.randomBytes(24).toString('hex').toUpperCase();
+    const now = Date.now();
+    const ip = req.socket.remoteAddress || req.headers['x-forwarded-for'] || '0.0.0.0';
+    const ua = req.headers['user-agent'] || '';
+
+    miniServiceSessions.set(token, {
+        serviceId,
+        createdAt: now,
+        expiresAt: now + MINI_SERVICE_SESSION_TTL_MS,
+        ip,
+        ua
+    });
+
+    return token;
 }
-function saveFreeConfig() { fs.writeFileSync(MINI_SERVICES_CONFIG, JSON.stringify(freeConfig, null, 2)); }
-loadFreeConfig();
+
+function getBearerToken(req) {
+    const h = req.headers['authorization'] || req.headers['Authorization'];
+    if (!h || typeof h !== 'string') return null;
+    const m = h.match(/^Bearer\s+(.+)$/i);
+    return m ? m[1].trim() : null;
+}
+
+function validateMiniServiceSession(token, expectedServiceId, req) {
+    if (!token) return { valid: false, error: 'Missing session token' };
+    const session = miniServiceSessions.get(token);
+    if (!session) return { valid: false, error: 'Invalid session' };
+    if (Date.now() > session.expiresAt) {
+        miniServiceSessions.delete(token);
+        return { valid: false, error: 'Session expired' };
+    }
+    if (expectedServiceId && session.serviceId !== expectedServiceId) return { valid: false, error: 'Session service mismatch' };
+
+    const ip = req.socket.remoteAddress || req.headers['x-forwarded-for'] || '0.0.0.0';
+    if (session.ip && session.ip !== ip) return { valid: false, error: 'Session IP mismatch' };
+
+    return { valid: true, session };
+}
+
+setInterval(() => {
+    const now = Date.now();
+    for (const [token, s] of miniServiceSessions.entries()) {
+        if (now > s.expiresAt) miniServiceSessions.delete(token);
+    }
+}, 60 * 1000);
 
 function isProtected(data) {
     if (!data) return false;
@@ -151,7 +283,24 @@ let systemStats = {
     endpointLatency: {},
     endpointErrors: {},
     endpointLastUsed: {},
-    endpointRequestTimeline: {}
+    endpointRequestTimeline: {},
+
+    // Cache monitoring
+    cacheStats: {
+        hits: 0,
+        misses: 0,
+        sets: 0,
+        evictions: 0,
+        clears: 0,
+        lastClear: null
+    },
+
+    // Mini-services monitoring
+    miniServiceStats: {},
+    miniServiceUsers: {},
+
+    // Histórico (últimas 24h)
+    requestHistory: []
 };
 
 // --- FIREWALL & WAF ---
@@ -196,30 +345,57 @@ function wafMiddleware(req, res) {
 }
 
 // --- CACHE SYSTEM ---
-const cache = new Map(); // endpoint -> { data, timestamp, ttl }
+const cache = new Map(); // cacheKey -> { data, timestamp, ttl }
+
+let statsSaveTimer = null;
+function scheduleSaveStats() {
+    if (statsSaveTimer) return;
+    statsSaveTimer = setTimeout(() => {
+        statsSaveTimer = null;
+        saveStats();
+    }, 750);
+}
 
 function getCache(key) {
     const entry = cache.get(key);
-    if (!entry) return null;
-    if (Date.now() > entry.timestamp + entry.ttl) {
-        cache.delete(key);
+    if (!entry) {
+        systemStats.cacheStats.misses++;
+        scheduleSaveStats();
         return null;
     }
+
+    if (Date.now() > entry.timestamp + entry.ttl) {
+        cache.delete(key);
+        systemStats.cacheStats.misses++;
+        systemStats.cacheStats.evictions++;
+        scheduleSaveStats();
+        return null;
+    }
+
+    systemStats.cacheStats.hits++;
+    scheduleSaveStats();
     return entry.data;
 }
 
 function setCache(key, data, ttl = 60000) {
     cache.set(key, { data, timestamp: Date.now(), ttl });
+    systemStats.cacheStats.sets++;
+    scheduleSaveStats();
 }
 
 function clearCache(endpoint = null) {
     if (endpoint) {
         cache.delete(endpoint);
+        systemStats.cacheStats.clears++;
+        systemStats.cacheStats.lastClear = new Date().toISOString();
         auditLog(null, 'SYSTEM', 'CACHE_CLEARED', `Cache for ${endpoint} cleared`);
     } else {
         cache.clear();
+        systemStats.cacheStats.clears++;
+        systemStats.cacheStats.lastClear = new Date().toISOString();
         auditLog(null, 'SYSTEM', 'CACHE_CLEARED_ALL', 'All cache cleared');
     }
+    scheduleSaveStats();
 }
 
 function loadStats() {
@@ -235,14 +411,21 @@ function loadStats() {
             systemStats.endpointErrors = stats.endpointErrors || {};
             systemStats.endpointLastUsed = stats.endpointLastUsed || {};
             systemStats.endpointRequestTimeline = stats.endpointRequestTimeline || {};
+
+            systemStats.cacheStats = { ...systemStats.cacheStats, ...(stats.cacheStats || {}) };
+            systemStats.miniServiceStats = stats.miniServiceStats || {};
+            systemStats.miniServiceUsers = stats.miniServiceUsers || {};
+            systemStats.requestHistory = stats.requestHistory || [];
         } catch (error) {}
     }
 }
+
 function saveStats() {
     try {
         fs.writeFileSync(STATS_FILE, JSON.stringify(systemStats, null, 2));
     } catch (error) {}
 }
+
 loadStats();
 
 // Auditoria Persistente
@@ -284,7 +467,16 @@ function sanitizeInput(input) {
 
 function validateApiKeyFormat(key) {
     if (typeof key !== 'string') return false;
-    return /^MUTANOX-[A-F0-9]+$/.test(key) || key === ADMIN_KEY;
+    if (key === ADMIN_KEY) return true;
+
+    // Keys geradas pelo painel (antigas e novas)
+    if (/^MUTANOX-[A-F0-9]+$/i.test(key)) return true;
+
+    // Mini-service keys
+    if (/^MINI_[A-Z0-9]+_[A-F0-9]+$/.test(key)) return true;
+
+    // Compatibilidade: chaves customizadas presentes no arquivo (ex: test-key, UserKey123)
+    return /^[A-Za-z0-9][A-Za-z0-9_-]{4,128}$/.test(key);
 }
 
 function loadApiKeys() {
@@ -310,6 +502,37 @@ function loadApiKeys() {
     return keys;
 }
 function saveApiKeys(keys) { fs.writeFileSync(API_KEYS_FILE, JSON.stringify(keys, null, 2)); }
+
+function ensureMiniServiceKeys() {
+    const keys = loadApiKeys();
+    const serviceIds = Object.keys((miniServicesConfig && miniServicesConfig.services) ? miniServicesConfig.services : {});
+    let changed = false;
+
+    for (const serviceId of serviceIds) {
+        const exists = Object.entries(keys).some(([k, v]) => v && v.miniServiceKey === true && v.miniServiceId === serviceId && v.active !== false);
+        if (exists) continue;
+
+        const newKey = `MINI_${serviceId.toUpperCase()}_${generateUid(24).toUpperCase()}`;
+        keys[newKey] = {
+            owner: `MiniService:${serviceId}`,
+            role: 'mini_service',
+            active: true,
+            usageCount: 0,
+            dailyUsage: 0,
+            dailyLimit: 0,
+            lastUsed: null,
+            lastReset: new Date().toDateString(),
+            createdAt: new Date().toISOString(),
+            miniServiceKey: true,
+            miniServiceId: serviceId
+        };
+        changed = true;
+    }
+
+    if (changed) saveApiKeys(keys);
+}
+
+ensureMiniServiceKeys();
 
 async function triggerWebhook(apiKey, type, data) {
     const keys = loadApiKeys();
@@ -354,18 +577,81 @@ function validateAndTrackKey(key, skipIncrement = false, userAgent = '') {
         keyData.dailyUsage = (keyData.dailyUsage || 0) + 1;
         keyData.lastUsed = new Date().toISOString();
         saveApiKeys(keys);
-        systemStats.totalRequests++;
-        
-        // Track device
-        const ua = userAgent ? userAgent.toLowerCase() : '';
-        if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) systemStats.deviceHits.mobile++;
-        else if (ua.includes('tablet') || ua.includes('ipad')) systemStats.deviceHits.tablet++;
-        else systemStats.deviceHits.desktop++;
-        
-        saveStats();
     }
-    
-    return { valid: true, isAdmin: keyData.role === 'admin', owner: keyData.owner };
+
+    return {
+        valid: true,
+        isAdmin: keyData.role === 'admin',
+        owner: keyData.owner,
+        role: keyData.role,
+        miniServiceId: keyData.miniServiceId
+    };
+}
+
+function trackRequestEvent({ endpointId, miniServiceId, userAgent = '', ip = '', statusCode = 200, latency = 0 }) {
+    if (!endpointId) endpointId = 'unknown';
+
+    systemStats.totalRequests++;
+    if (statusCode >= 500) systemStats.errors++;
+
+    systemStats.endpointHits[endpointId] = (systemStats.endpointHits[endpointId] || 0) + 1;
+    systemStats.endpointLastUsed[endpointId] = new Date().toISOString();
+
+    if (!systemStats.endpointRequestTimeline[endpointId]) systemStats.endpointRequestTimeline[endpointId] = [];
+    systemStats.endpointRequestTimeline[endpointId].push(Date.now());
+    if (systemStats.endpointRequestTimeline[endpointId].length > 2000) {
+        systemStats.endpointRequestTimeline[endpointId] = systemStats.endpointRequestTimeline[endpointId].slice(-2000);
+    }
+
+    if (!systemStats.endpointLatency[endpointId]) systemStats.endpointLatency[endpointId] = [];
+    systemStats.endpointLatency[endpointId].push(latency);
+    if (systemStats.endpointLatency[endpointId].length > 200) systemStats.endpointLatency[endpointId].shift();
+
+    if (statusCode >= 500) {
+        if (!systemStats.endpointErrors[endpointId]) systemStats.endpointErrors[endpointId] = 0;
+        systemStats.endpointErrors[endpointId]++;
+    }
+
+    const ua = (userAgent || '').toLowerCase();
+    if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) systemStats.deviceHits.mobile++;
+    else if (ua.includes('tablet') || ua.includes('ipad')) systemStats.deviceHits.tablet++;
+    else systemStats.deviceHits.desktop++;
+
+    if (miniServiceId) {
+        if (!systemStats.miniServiceStats[miniServiceId]) {
+            systemStats.miniServiceStats[miniServiceId] = { requests: 0, errors: 0, totalLatency: 0, avgLatency: 0, uniqueUsers: 0, lastUsed: null };
+        }
+        const ms = systemStats.miniServiceStats[miniServiceId];
+        ms.requests++;
+        if (statusCode >= 500) ms.errors++;
+        ms.totalLatency += latency;
+        ms.avgLatency = ms.requests > 0 ? Math.round(ms.totalLatency / ms.requests) : 0;
+        ms.lastUsed = new Date().toISOString();
+
+        if (!systemStats.miniServiceUsers[miniServiceId]) systemStats.miniServiceUsers[miniServiceId] = [];
+        if (ip && !systemStats.miniServiceUsers[miniServiceId].includes(ip)) {
+            systemStats.miniServiceUsers[miniServiceId].push(ip);
+            if (systemStats.miniServiceUsers[miniServiceId].length > 2000) {
+                systemStats.miniServiceUsers[miniServiceId] = systemStats.miniServiceUsers[miniServiceId].slice(-2000);
+            }
+        }
+        ms.uniqueUsers = systemStats.miniServiceUsers[miniServiceId].length;
+
+        const cfg = getMiniServiceConfig(miniServiceId);
+        if (cfg && cfg.analyticsData) {
+            cfg.analyticsData.totalAccess = ms.requests;
+            cfg.analyticsData.uniqueUsers = ms.uniqueUsers;
+            cfg.analyticsData.averageTime = ms.avgLatency;
+            cfg.analyticsData.lastUpdate = ms.lastUsed;
+        }
+    }
+
+    const now = Date.now();
+    systemStats.requestHistory.push({ ts: now, endpointId, miniServiceId: miniServiceId || null, latency, statusCode });
+    // keep last 24h and prevent unbounded growth
+    systemStats.requestHistory = systemStats.requestHistory.filter(e => now - e.ts < 24 * 60 * 60 * 1000).slice(-5000);
+
+    scheduleSaveStats();
 }
 
 // ==========================================
@@ -507,13 +793,53 @@ const server = http.createServer(async (req, res) => {
     // Aplicar WAF
     if (!wafMiddleware(req, res)) return;
 
+    const requestStart = Date.now();
+    const ip = req.socket.remoteAddress || req.headers['x-forwarded-for'] || '0.0.0.0';
+    const userAgent = req.headers['user-agent'] || '';
+
     const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
     const path = parsedUrl.pathname;
     const query = Object.fromEntries(parsedUrl.searchParams);
 
+    req._tracking = { endpointId: null, miniServiceId: null };
+
+    // Pre-derivação (pode ser sobrescrita pela rota)
+    if (path === '/api/consultas') {
+        req._tracking.endpointId = query.tipo || 'consultas';
+    } else if (path.startsWith('/api/admin/')) {
+        req._tracking.endpointId = `admin:${path.replace('/api/admin/', '').split('/')[0] || 'root'}`;
+    } else if (path.startsWith('/api/user/')) {
+        req._tracking.endpointId = `user:${path.replace('/api/user/', '').split('/')[0] || 'root'}`;
+    } else if (path.startsWith('/api/mini-service/')) {
+        req._tracking.endpointId = `mini-service:${path.replace('/api/mini-service/', '')}`;
+    } else if (path.startsWith('/api/docs/')) {
+        req._tracking.endpointId = `docs-api:${path.replace('/api/docs/', '')}`;
+    } else if (path.startsWith('/api/')) {
+        req._tracking.endpointId = `api:${path.replace('/api/', '')}`;
+    } else {
+        req._tracking.endpointId = `page:${path}`;
+    }
+
+    if (path === '/consultas' || path.startsWith('/consultas/') || path.includes('consultas.js')) req._tracking.miniServiceId = 'consultas';
+    if (path === '/docs' || path.startsWith('/docs/')) req._tracking.miniServiceId = 'docs';
+    if (path === '/api/dashboard_users' || path === '/user-dashboard' || path.includes('dashboard_users.js')) req._tracking.miniServiceId = 'dashboard_users';
+
+    res.on('finish', () => {
+        try {
+            trackRequestEvent({
+                endpointId: req._tracking.endpointId,
+                miniServiceId: req._tracking.miniServiceId,
+                userAgent,
+                ip,
+                statusCode: res.statusCode,
+                latency: Date.now() - requestStart
+            });
+        } catch (e) {}
+    });
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
@@ -529,6 +855,13 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     if (path === '/api/dashboard_users' || path === '/user-dashboard') {
+        const cfg = getMiniServiceConfig('dashboard_users');
+        if (cfg && cfg.active === false) {
+            res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`<h1 style="font-family: Inter, Arial; padding: 40px;">Mini-service em manutenção</h1><p style="font-family: Inter, Arial; padding: 0 40px;">${freeConfig.maintenanceMessage}</p>`);
+            return;
+        }
+
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         fs.createReadStream(pathModule.join(__dirname, 'mini-services', 'dashboard_users.html')).pipe(res);
         return;
@@ -539,6 +872,13 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     if (path === '/consultas') {
+        const cfg = getMiniServiceConfig('consultas');
+        if (cfg && cfg.active === false) {
+            res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`<h1 style="font-family: Inter, Arial; padding: 40px;">Mini-service em manutenção</h1><p style="font-family: Inter, Arial; padding: 0 40px;">${freeConfig.maintenanceMessage}</p>`);
+            return;
+        }
+
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         fs.createReadStream(pathModule.join(__dirname, 'mini-services', 'consultas.html')).pipe(res);
         return;
@@ -549,6 +889,13 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     if (path === '/docs') {
+        const cfg = getMiniServiceConfig('docs');
+        if (cfg && cfg.active === false) {
+            res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(`<h1 style="font-family: Inter, Arial; padding: 40px;">Mini-service em manutenção</h1><p style="font-family: Inter, Arial; padding: 0 40px;">${freeConfig.maintenanceMessage}</p>`);
+            return;
+        }
+
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         fs.createReadStream(pathModule.join(__dirname, 'docs', 'index.html')).pipe(res);
         return;
@@ -556,6 +903,96 @@ const server = http.createServer(async (req, res) => {
     if (path === '/docs/api-documentation.js') {
         res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
         fs.createReadStream(pathModule.join(__dirname, 'docs', 'api-documentation.js')).pipe(res);
+        return;
+    }
+
+    // Mini-service auth (sessions)
+    if (path === '/api/mini-service/auth' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { serviceId } = JSON.parse(body || '{}');
+                const cfg = getMiniServiceConfig(serviceId);
+                if (!cfg) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Mini-service not found' }));
+                    return;
+                }
+                if (cfg.active === false) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: freeConfig.maintenanceMessage }));
+                    return;
+                }
+
+                const token = createMiniServiceSession(serviceId, req);
+                // Tag request as coming from this mini-service
+                req._tracking.miniServiceId = serviceId;
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    sessionId: token,
+                    expiresIn: MINI_SERVICE_SESSION_TTL_MS,
+                    service: {
+                        id: serviceId,
+                        name: cfg.name,
+                        description: cfg.description,
+                        theme: cfg.theme || { primaryColor: freeConfig.primaryColor, secondaryColor: freeConfig.secondaryColor },
+                        enabledFeatures: cfg.enabledFeatures || []
+                    }
+                }));
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Invalid body' }));
+            }
+        });
+        return;
+    }
+
+    if (path === '/api/mini-service/validate-session') {
+        const token = getBearerToken(req);
+        const validation = validateMiniServiceSession(token, null, req);
+        res.writeHead(validation.valid ? 200 : 401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: validation.valid,
+            valid: validation.valid,
+            serviceId: validation.valid ? validation.session.serviceId : null,
+            expiresAt: validation.valid ? validation.session.expiresAt : null,
+            error: validation.valid ? null : validation.error
+        }));
+        return;
+    }
+
+    // Docs helper (public): lista todos os endpoints disponíveis
+    if (path === '/api/docs/endpoints') {
+        const baseEndpoints = Object.entries(endpointsConfig).map(([id, cfg]) => ({
+            id,
+            name: cfg.name || id,
+            active: cfg.active !== false,
+            maintenance: !!cfg.maintenance,
+            dynamic: !!cfg.dynamic,
+            params: cfg.params || []
+        }));
+
+        const staticEndpoints = [
+            { id: 'admin.stats', method: 'GET', url: '/api/admin/stats?apikey={ADMIN_KEY}', auth: 'admin' },
+            { id: 'admin.stats.detailed', method: 'GET', url: '/api/admin/stats/detailed?apikey={ADMIN_KEY}', auth: 'admin' },
+            { id: 'admin.cache.stats', method: 'GET', url: '/api/admin/cache/stats?apikey={ADMIN_KEY}', auth: 'admin' },
+            { id: 'admin.mini-services.list', method: 'GET', url: '/api/admin/mini-services/list?apikey={ADMIN_KEY}', auth: 'admin' },
+            { id: 'user.stats', method: 'GET', url: '/api/user/stats?apikey={API_KEY}', auth: 'user' },
+            { id: 'mini-service.auth', method: 'POST', url: '/api/mini-service/auth', auth: 'public' },
+            { id: 'mini-service.validate-session', method: 'GET', url: '/api/mini-service/validate-session', auth: 'mini-service-session' }
+        ];
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            generatedAt: new Date().toISOString(),
+            endpoints: baseEndpoints,
+            static: staticEndpoints,
+            miniServices: miniServicesConfig.services
+        }));
         return;
     }
 
@@ -601,19 +1038,195 @@ const server = http.createServer(async (req, res) => {
         if (path === '/api/admin/stats') {
             const keys = loadApiKeys();
             const health = await checkExternalHealth();
+            const activeKeys = Object.values(keys).filter(k => k && k.active !== false).length;
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 success: true,
                 totalRequests: systemStats.totalRequests,
                 errors: systemStats.errors,
                 uptime: Date.now() - systemStats.startTime,
-                keys: keys,
+                activeKeys,
+                keys,
                 endpointHits: systemStats.endpointHits,
                 deviceHits: systemStats.deviceHits,
+                cacheStats: { ...systemStats.cacheStats, size: cache.size },
+                miniServiceStats: systemStats.miniServiceStats,
+                miniServicesConfig,
                 logs: liveLogs,
-                health: health,
+                health,
                 config: freeConfig
             }));
+        } else if (path === '/api/admin/stats/detailed') {
+            const keys = loadApiKeys();
+            const health = await checkExternalHealth();
+            const activeKeys = Object.values(keys).filter(k => k && k.active !== false).length;
+
+            const endpointStats = {};
+            const allEndpointIds = new Set([...Object.keys(endpointsConfig), ...Object.keys(systemStats.endpointHits)]);
+            for (const endpointId of allEndpointIds) {
+                const hits = systemStats.endpointHits[endpointId] || 0;
+                const errors = systemStats.endpointErrors[endpointId] || 0;
+                const latencies = systemStats.endpointLatency[endpointId] || [];
+                const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+                const lastUsed = systemStats.endpointLastUsed[endpointId] || null;
+                const errorRate = hits > 0 ? parseFloat(((errors / hits) * 100).toFixed(2)) : 0;
+
+                const timeline = systemStats.endpointRequestTimeline[endpointId] || [];
+                const now = Date.now();
+                const requestsLastHour = timeline.filter(ts => now - ts < 3600000).length;
+                const requestsLastDay = timeline.filter(ts => now - ts < 86400000).length;
+
+                endpointStats[endpointId] = { hits, errors, avgLatency, lastUsed, errorRate, requestsLastHour, requestsLastDay };
+            }
+
+            const now = Date.now();
+            const hourly = [];
+            for (let i = 23; i >= 0; i--) {
+                const hourStart = now - (i * 3600000);
+                const hourEnd = hourStart + 3600000;
+                const slice = (systemStats.requestHistory || []).filter(e => e.ts >= hourStart && e.ts < hourEnd);
+                hourly.push({
+                    hour: new Date(hourStart).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    requests: slice.length,
+                    errors: slice.filter(e => e.statusCode >= 500).length,
+                    avgLatency: slice.length > 0 ? Math.round(slice.reduce((a, b) => a + b.latency, 0) / slice.length) : 0
+                });
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                totals: {
+                    totalRequests: systemStats.totalRequests,
+                    totalErrors: systemStats.errors,
+                    uptime: Date.now() - systemStats.startTime,
+                    activeKeys
+                },
+                endpoints: endpointStats,
+                miniServices: {
+                    config: miniServicesConfig.services,
+                    stats: systemStats.miniServiceStats,
+                    users: systemStats.miniServiceUsers
+                },
+                cache: { ...systemStats.cacheStats, size: cache.size },
+                history: { hourly },
+                keysCount: Object.keys(keys).length,
+                health
+            }));
+        } else if (path === '/api/admin/cache/stats') {
+            const items = [];
+            for (const [key, entry] of cache.entries()) {
+                const ageMs = Date.now() - entry.timestamp;
+                const ttlMs = entry.ttl;
+                const expiresInMs = Math.max(0, (entry.timestamp + entry.ttl) - Date.now());
+                let sizeBytes = 0;
+                try { sizeBytes = Buffer.byteLength(JSON.stringify(entry.data || {}), 'utf8'); } catch (e) {}
+                items.push({ key, ageMs, ttlMs, expiresInMs, sizeBytes, cachedAt: new Date(entry.timestamp).toISOString() });
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                stats: { ...systemStats.cacheStats, size: cache.size },
+                items: items.sort((a, b) => b.cachedAt.localeCompare(a.cachedAt)).slice(0, 200)
+            }));
+        } else if (path === '/api/admin/mini-services/list') {
+            const keys = loadApiKeys();
+            const services = [];
+
+            for (const [serviceId, cfg] of Object.entries(miniServicesConfig.services || {})) {
+                const stats = systemStats.miniServiceStats[serviceId] || { requests: 0, errors: 0, avgLatency: 0, uniqueUsers: 0, lastUsed: null };
+                const serviceKey = Object.entries(keys).find(([k, v]) => v && v.miniServiceKey === true && v.miniServiceId === serviceId && v.active !== false);
+                const maskedKey = serviceKey ? `••••••••${serviceKey[0].slice(-4)}` : null;
+
+                services.push({
+                    id: serviceId,
+                    name: cfg.name,
+                    description: cfg.description,
+                    active: cfg.active !== false,
+                    theme: cfg.theme,
+                    enabledFeatures: cfg.enabledFeatures || [],
+                    welcomeMessage: cfg.welcomeMessage,
+                    keyMasked: maskedKey,
+                    stats
+                });
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, services }));
+        } else if (path === '/api/admin/mini-services/update-config' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const { serviceId, patch } = JSON.parse(body || '{}');
+                    if (!serviceId || !miniServicesConfig.services[serviceId]) throw new Error('Invalid serviceId');
+
+                    miniServicesConfig.services[serviceId] = { ...miniServicesConfig.services[serviceId], ...(patch || {}) };
+                    saveMiniServicesConfig();
+                    ensureMiniServiceKeys();
+
+                    auditLog(ADMIN_KEY, 'ADMIN', 'MINISERVICE_UPDATE_CONFIG', `Service: ${serviceId}`);
+                    broadcast({ type: 'MINISERVICES_UPDATE', services: miniServicesConfig.services });
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true }));
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: e.message }));
+                }
+            });
+        } else if (path.startsWith('/api/admin/mini-services/') && path.endsWith('/stats')) {
+            const parts = path.split('/');
+            const serviceId = parts[4];
+            const cfg = getMiniServiceConfig(serviceId);
+            if (!cfg) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Not found' }));
+                return;
+            }
+            const stats = systemStats.miniServiceStats[serviceId] || { requests: 0, errors: 0, avgLatency: 0, uniqueUsers: 0, lastUsed: null };
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, serviceId, config: cfg, stats }));
+        } else if (path.startsWith('/api/admin/mini-services/') && path.endsWith('/generate-key') && req.method === 'POST') {
+            const parts = path.split('/');
+            const serviceId = parts[4];
+            if (!miniServicesConfig.services[serviceId]) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Not found' }));
+                return;
+            }
+            const keys = loadApiKeys();
+            for (const k of Object.keys(keys)) {
+                if (keys[k] && keys[k].miniServiceKey === true && keys[k].miniServiceId === serviceId) {
+                    keys[k].active = false;
+                }
+            }
+            const newKey = `MINI_${serviceId.toUpperCase()}_${generateUid(24).toUpperCase()}`;
+            keys[newKey] = {
+                owner: `MiniService:${serviceId}`,
+                role: 'mini_service',
+                active: true,
+                usageCount: 0,
+                dailyUsage: 0,
+                dailyLimit: 0,
+                lastUsed: null,
+                lastReset: new Date().toDateString(),
+                createdAt: new Date().toISOString(),
+                miniServiceKey: true,
+                miniServiceId: serviceId
+            };
+            saveApiKeys(keys);
+
+            auditLog(ADMIN_KEY, 'ADMIN', 'MINISERVICE_GENERATE_KEY', `Service: ${serviceId}`);
+            broadcast({ type: 'MINISERVICE_KEY_ROTATED', serviceId });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, keyMasked: `••••••••${newKey.slice(-4)}` }));
+        } else if (path === '/api/admin/docs/endpoints') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, endpointsConfig, miniServicesConfig: miniServicesConfig.services }));
         } else if (path === '/api/admin/keys/list') {
             const keys = loadApiKeys();
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -841,6 +1454,7 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({
                 success: true,
                 config: freeConfig,
+                miniServicesConfig,
                 usageHistory: systemStats.miniServiceHistory || []
             }));
         } else if (path === '/api/admin/miniservice/update' && req.method === 'POST') {
@@ -848,21 +1462,37 @@ const server = http.createServer(async (req, res) => {
             req.on('data', chunk => body += chunk);
             req.on('end', () => {
                 try {
-                    const data = JSON.parse(body);
-                    freeConfig = { ...freeConfig, ...data };
-                    saveFreeConfig();
-                    
-                    // Notificar todos os clientes via WebSocket sobre a mudança de configuração
-                    broadcast({
-                        type: 'CONFIG_UPDATE',
-                        config: freeConfig
-                    });
-                    
+                    const patch = JSON.parse(body || '{}');
+
+                    // Patch global
+                    const g = miniServicesConfig.global;
+                    if (patch.protectionMessage !== undefined) g.protectionMessage = patch.protectionMessage;
+                    if (patch.maintenanceMessage !== undefined) g.maintenanceMessage = patch.maintenanceMessage;
+                    if (patch.adBanner !== undefined) g.adBanner = patch.adBanner;
+                    if (patch.adLink !== undefined) g.adLink = patch.adLink;
+                    if (patch.primaryColor !== undefined) g.primaryColor = patch.primaryColor;
+                    if (patch.secondaryColor !== undefined) g.secondaryColor = patch.secondaryColor;
+                    if (patch.showStatsWidget !== undefined) g.showStatsWidget = patch.showStatsWidget;
+                    if (patch.layoutType !== undefined) g.layoutType = patch.layoutType;
+
+                    // Patch consultas service
+                    const svc = miniServicesConfig.services.consultas;
+                    if (patch.active !== undefined) svc.active = !!patch.active;
+                    if (patch.message !== undefined) svc.welcomeMessage = patch.message;
+                    if (patch.welcomeMessage !== undefined) svc.welcomeMessage = patch.welcomeMessage;
+                    if (patch.theme && typeof patch.theme === 'object') svc.theme = { ...(svc.theme || {}), ...patch.theme };
+
+                    saveMiniServicesConfig();
+                    ensureMiniServiceKeys();
+
+                    broadcast({ type: 'CONFIG_UPDATE', config: freeConfig, miniServicesConfig: miniServicesConfig.services });
                     auditLog(ADMIN_KEY, 'ADMIN', 'UPDATE_MINISERVICE', 'Mini Service configuration updated');
+
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true }));
                 } catch (e) {
-                    res.writeHead(400); res.end(JSON.stringify({ success: false, error: e.message }));
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: e.message }));
                 }
             });
         } else if (path === '/api/admin/docs/read') {
@@ -886,12 +1516,37 @@ const server = http.createServer(async (req, res) => {
             let body = '';
             req.on('data', chunk => body += chunk);
             req.on('end', () => {
-                const data = JSON.parse(body);
-                freeConfig = { ...freeConfig, ...data };
-                saveFreeConfig();
-                auditLog(ADMIN_KEY, 'ADMIN', 'UPDATE_CONFIG', 'Global config updated');
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
+                try {
+                    const patch = JSON.parse(body || '{}');
+
+                    // Patch global
+                    const g = miniServicesConfig.global;
+                    if (patch.protectionMessage !== undefined) g.protectionMessage = patch.protectionMessage;
+                    if (patch.maintenanceMessage !== undefined) g.maintenanceMessage = patch.maintenanceMessage;
+                    if (patch.adBanner !== undefined) g.adBanner = patch.adBanner;
+                    if (patch.adLink !== undefined) g.adLink = patch.adLink;
+                    if (patch.primaryColor !== undefined) g.primaryColor = patch.primaryColor;
+                    if (patch.secondaryColor !== undefined) g.secondaryColor = patch.secondaryColor;
+                    if (patch.showStatsWidget !== undefined) g.showStatsWidget = patch.showStatsWidget;
+                    if (patch.layoutType !== undefined) g.layoutType = patch.layoutType;
+
+                    // consultas service
+                    const svc = miniServicesConfig.services.consultas;
+                    if (patch.active !== undefined) svc.active = !!patch.active;
+                    if (patch.message !== undefined) svc.welcomeMessage = patch.message;
+
+                    saveMiniServicesConfig();
+                    ensureMiniServiceKeys();
+
+                    auditLog(ADMIN_KEY, 'ADMIN', 'UPDATE_CONFIG', 'Global config updated');
+                    broadcast({ type: 'CONFIG_UPDATE', config: freeConfig, miniServicesConfig: miniServicesConfig.services });
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true }));
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: e.message }));
+                }
             });
         } else if (path === '/api/admin/protection/bulk' && req.method === 'POST') {
             let body = '';
@@ -1098,109 +1753,124 @@ const server = http.createServer(async (req, res) => {
     
     // Public API
     if (path === '/api/consultas') {
-        const apiKey = query.apikey;
+        let apiKey = query.apikey;
         const tipo = query.tipo;
 
-        if (!tipo) { 
+        if (!tipo) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ sucesso: false, erro: 'Tipo não especificado' })); 
-            return; 
+            res.end(JSON.stringify({ sucesso: false, erro: 'Tipo não especificado' }));
+            return;
         }
 
-        if (endpointsConfig[tipo] && endpointsConfig[tipo].maintenance) {
+        // Atualiza tracking com o tipo real
+        req._tracking.endpointId = tipo;
+
+        const endpointCfg = endpointsConfig[tipo];
+        if (endpointCfg && endpointCfg.maintenance) {
             res.writeHead(503, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ sucesso: false, erro: freeConfig.maintenanceMessage }));
             return;
         }
 
-        const auth = validateAndTrackKey(apiKey, false, req.headers['user-agent']);
-        if (!auth.valid && !freeConfig.active) {
+        let auth = null;
+        let isMiniServiceRequest = false;
+
+        // Auth via sessão do mini-service (sem expor API key)
+        if (!apiKey) {
+            const token = getBearerToken(req);
+            const validation = validateMiniServiceSession(token, 'consultas', req);
+            if (validation.valid) {
+                const cfg = getMiniServiceConfig('consultas');
+                if (cfg && cfg.active === false) {
+                    res.writeHead(503, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ sucesso: false, erro: freeConfig.maintenanceMessage }));
+                    return;
+                }
+
+                req._tracking.miniServiceId = 'consultas';
+                isMiniServiceRequest = true;
+
+                // Usa a mini-service key no servidor (não exposta no frontend)
+                const keys = loadApiKeys();
+                const found = Object.entries(keys).find(([k, v]) => v && v.miniServiceKey === true && v.miniServiceId === 'consultas' && v.active !== false);
+                if (found) {
+                    apiKey = found[0];
+                } else {
+                    ensureMiniServiceKeys();
+                    const keys2 = loadApiKeys();
+                    const found2 = Object.entries(keys2).find(([k, v]) => v && v.miniServiceKey === true && v.miniServiceId === 'consultas' && v.active !== false);
+                    apiKey = found2 ? found2[0] : null;
+                }
+
+                auth = apiKey ? validateAndTrackKey(apiKey, false) : { valid: true, isAdmin: false, role: 'mini_service' };
+            }
+        }
+
+        // Auth por API key (compatível com clientes antigos)
+        if (!auth) {
+            auth = validateAndTrackKey(apiKey, false);
+        }
+
+        if (!auth.valid) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ sucesso: false, erro: auth.error || 'API Key inválida' }));
             return;
         }
 
         if (!auth.isAdmin) {
-            if (tipo === 'cpf' && isProtected({ cpf: query.cpf })) { 
+            if (tipo === 'cpf' && isProtected({ cpf: query.cpf })) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage })); 
-                return; 
-            }
-            if (tipo === 'nome' && isProtected({ nome: query.q })) { 
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage })); 
-                return; 
-            }
-            if (tipo === 'numero' && isProtected({ numero: query.q })) { 
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage })); 
-                return; 
-            }
-        }
-
-        if (!auth.valid && freeConfig.active) {
-            // Adicionar à fila se for consulta gratuita
-            requestQueue.push({ req, res, tipo, query, apiKey });
-            if (requestQueue.length > 10) {
-                res.writeHead(429, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ sucesso: false, erro: 'Fila cheia, tente novamente em instantes' }));
+                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
                 return;
             }
-            processQueue();
-            return;
+            if (tipo === 'nome' && isProtected({ nome: query.q })) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
+                return;
+            }
+            if (tipo === 'numero' && isProtected({ numero: query.q })) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
+                return;
+            }
         }
 
-        await handleApiRequest(req, res, tipo, query, apiKey);
+        await handleApiRequest(req, res, tipo, query, apiKey, { isMiniServiceRequest });
         return;
     }
 
     res.writeHead(404); res.end();
 });
 
-async function handleApiRequest(req, res, tipo, query, apiKey) {
-    const startTime = Date.now();
-    systemStats.endpointHits[tipo] = (systemStats.endpointHits[tipo] || 0) + 1;
-    systemStats.endpointLastUsed[tipo] = new Date().toISOString();
-    
-    // Track request timeline
-    if (!systemStats.endpointRequestTimeline[tipo]) systemStats.endpointRequestTimeline[tipo] = [];
-    systemStats.endpointRequestTimeline[tipo].push(Date.now());
-    // Keep only last 1000 requests per endpoint to prevent memory issues
-    if (systemStats.endpointRequestTimeline[tipo].length > 1000) {
-        systemStats.endpointRequestTimeline[tipo] = systemStats.endpointRequestTimeline[tipo].slice(-1000);
-    }
-    
-    saveStats();
+async function handleApiRequest(req, res, tipo, query, apiKey, options = {}) {
+    const isMiniServiceRequest = !!options.isMiniServiceRequest || (typeof apiKey === 'string' && apiKey.startsWith('MINI_'));
+
     auditLog(apiKey, 'QUERY', tipo, `Query: ${query.q || query.cpf || query.id}`);
 
-    // Verificar Cache
+    // Cache
     const cacheKey = `${tipo}:${JSON.stringify(query)}`;
     const cachedData = getCache(cacheKey);
     if (cachedData) {
-        const latency = Date.now() - startTime;
-        if (!systemStats.endpointLatency[tipo]) systemStats.endpointLatency[tipo] = [];
-        systemStats.endpointLatency[tipo].push(latency);
-        if (systemStats.endpointLatency[tipo].length > 100) systemStats.endpointLatency[tipo].shift();
-        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ...cachedData, cached: true }));
         return;
     }
 
-    let result;
     try {
-        // Verificar se é um endpoint dinâmico
+        let result;
+
         if (endpointsConfig[tipo] && endpointsConfig[tipo].dynamic) {
             const epPath = pathModule.join(__dirname, 'endpoints', `${tipo}.js`);
-            if (fs.existsSync(epPath)) {
-                const code = fs.readFileSync(epPath, 'utf8');
-                // Execução segura simulada
-                const epFn = new Function('query', 'fetch', `return (async () => { ${code} })();`);
-                const data = await epFn(query, fetch);
-                result = { sucesso: true, ...data, criador: '@MutanoX' };
-            } else {
-                result = { sucesso: false, erro: 'Arquivo do endpoint não encontrado' };
+            if (!fs.existsSync(epPath)) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ sucesso: false, erro: 'Arquivo do endpoint não encontrado' }));
+                return;
             }
+
+            const code = fs.readFileSync(epPath, 'utf8');
+            const epFn = new Function('query', 'fetch', `return (async () => { ${code} })();`);
+            const data = await epFn(query, fetch);
+            result = { sucesso: true, ...data, criador: '@MutanoX' };
         } else {
             switch (tipo.toLowerCase()) {
                 case 'cpf': result = await consultarCPF(query.cpf); break;
@@ -1218,36 +1888,22 @@ async function handleApiRequest(req, res, tipo, query, apiKey) {
                 case 'video': result = await textToVideo(query.prompt, query.quality || '1080p', query.ratio || '9:16', query.apikey || ADMIN_KEY); break;
                 case 'nsfw': result = await nsfwImageGen(query.prompt, query.negative || 'blurry,low quality', query.apikey || ADMIN_KEY); break;
                 case 'bypass': result = await bypassCity(query.url); break;
-                default: result = { sucesso: false, erro: 'Tipo desconhecido' };
+                default:
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ sucesso: false, erro: 'Tipo desconhecido' }));
+                    return;
             }
         }
-        
-        // Adicionar publicidade se for consulta gratuita
-        if (!apiKey || apiKey === 'PUBLIC') {
-            result.ad = {
-                text: freeConfig.adBanner,
-                link: freeConfig.adLink
-            };
+
+        if (result && result.sucesso && isMiniServiceRequest) {
+            result.ad = { text: freeConfig.adBanner, link: freeConfig.adLink };
         }
 
-        if (result.sucesso) setCache(cacheKey, result);
-        
-        // Track latency
-        const latency = Date.now() - startTime;
-        if (!systemStats.endpointLatency[tipo]) systemStats.endpointLatency[tipo] = [];
-        systemStats.endpointLatency[tipo].push(latency);
-        if (systemStats.endpointLatency[tipo].length > 100) systemStats.endpointLatency[tipo].shift();
-        
+        if (result && result.sucesso) setCache(cacheKey, result);
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
     } catch (e) {
-        systemStats.errors++;
-        
-        // Track endpoint-specific errors
-        if (!systemStats.endpointErrors[tipo]) systemStats.endpointErrors[tipo] = 0;
-        systemStats.endpointErrors[tipo]++;
-        
-        saveStats();
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ sucesso: false, erro: e.message }));
     }
@@ -1255,45 +1911,49 @@ async function handleApiRequest(req, res, tipo, query, apiKey) {
 
 const wss = new WebSocket.Server({ server });
 
+wss.on('connection', (ws) => {
+    ws.auth = { role: 'public', apiKey: null };
+
+    ws.on('message', (raw) => {
+        try {
+            const msg = JSON.parse(raw.toString());
+            if (msg && msg.type === 'AUTH' && typeof msg.apiKey === 'string') {
+                const apiKey = msg.apiKey.trim();
+                if (apiKey === ADMIN_KEY) {
+                    ws.auth = { role: 'admin', apiKey };
+                    ws.send(JSON.stringify({ type: 'AUTH_OK', role: 'admin' }));
+                    return;
+                }
+
+                const auth = validateAndTrackKey(apiKey, true);
+                if (auth.valid) {
+                    ws.auth = { role: 'user', apiKey };
+                    ws.send(JSON.stringify({ type: 'AUTH_OK', role: 'user' }));
+                } else {
+                    ws.send(JSON.stringify({ type: 'AUTH_FAIL' }));
+                }
+            }
+        } catch (e) {}
+    });
+});
+
 function broadcast(data) {
     const message = JSON.stringify(data);
     wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-            // Se o cliente tiver uma API Key associada (enviada no protocolo ou mensagem inicial), 
-            // poderíamos filtrar dados, mas por enquanto enviamos o estado global de stats
-            client.send(message);
-        }
+        if (client.readyState === WebSocket.OPEN) client.send(message);
     });
 }
 
-// Atualização periódica de estatísticas para todos os clientes conectados
-setInterval(() => {
-    broadcast({
-        type: 'STATS_UPDATE',
-        totalRequests: systemStats.totalRequests,
-        errors: systemStats.errors,
-        uptime: Date.now() - systemStats.startTime,
-        endpointHits: systemStats.endpointHits,
-        health: systemStats.health || [],
-        keys: loadApiKeys() // Opcional: apenas para admin, mas simplificando para o teste
-    });
-}, 5000);
-
-// Monitoramento de Latência Real-time (Usando a função já declarada acima)
-
-// Broadcast stats every 5 seconds
-setInterval(async () => {
-    const health = await checkExternalHealth();
-    const keys = loadApiKeys();
-    
-    // Build endpoint stats for broadcast
+function buildEndpointStatsSnapshot() {
     const endpointStats = {};
-    for (const [id, config] of Object.entries(endpointsConfig)) {
+    const allIds = new Set([...Object.keys(endpointsConfig), ...Object.keys(systemStats.endpointHits)]);
+
+    for (const id of allIds) {
         const hits = systemStats.endpointHits[id] || 0;
         const errors = systemStats.endpointErrors[id] || 0;
         const latencies = systemStats.endpointLatency[id] || [];
         const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
-        
+
         endpointStats[id] = {
             hits,
             errors,
@@ -1302,18 +1962,55 @@ setInterval(async () => {
             lastUsed: systemStats.endpointLastUsed[id] || null
         };
     }
-    
-    broadcast({
+
+    return endpointStats;
+}
+
+async function broadcastStatsUpdate() {
+    const health = await checkExternalHealth();
+    const keys = loadApiKeys();
+
+    const common = {
         type: 'STATS_UPDATE',
         totalRequests: systemStats.totalRequests,
         errors: systemStats.errors,
         uptime: Date.now() - systemStats.startTime,
         endpointHits: systemStats.endpointHits,
-        endpointStats: endpointStats,
+        endpointStats: buildEndpointStatsSnapshot(),
         deviceHits: systemStats.deviceHits,
-        health: health,
-        keys: keys
+        cacheStats: { ...systemStats.cacheStats, size: cache.size },
+        miniServiceStats: systemStats.miniServiceStats,
+        health
+    };
+
+    wss.clients.forEach(client => {
+        if (client.readyState !== WebSocket.OPEN) return;
+
+        if (client.auth && client.auth.role === 'admin') {
+            client.send(JSON.stringify({
+                ...common,
+                keys,
+                logs: liveLogs,
+                miniServicesConfig: miniServicesConfig.services
+            }));
+            return;
+        }
+
+        if (client.auth && client.auth.role === 'user' && client.auth.apiKey) {
+            const k = client.auth.apiKey;
+            client.send(JSON.stringify({
+                ...common,
+                keys: keys[k] ? { [k]: keys[k] } : {}
+            }));
+            return;
+        }
+
+        client.send(JSON.stringify(common));
     });
+}
+
+setInterval(() => {
+    broadcastStatsUpdate().catch(() => {});
 }, 5000);
 
 const HOST = '0.0.0.0';

@@ -56,13 +56,14 @@ let currentLang = localStorage.getItem('mutanox_lang') || 'pt';
 let savedApiKey = localStorage.getItem('mutanox_api_key') || '';
 
 // Carregar API Key salva
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     if (savedApiKey) {
         const authInput = document.getElementById('auth-api-key');
         if (authInput) authInput.value = savedApiKey;
     }
 
     setLanguage(currentLang);
+    await loadEndpointsFromServer();
     renderEndpoints();
 });
 
@@ -171,51 +172,82 @@ window.authenticate = function() {
     }, 500);
 };
 
-// Endpoints de usuários disponíveis (apenas 3 principais)
-const userEndpoints = [
-    {
-        id: 'cpf',
-        name: 'Consultar CPF',
-        icon: 'fa-id-card',
-        description: 'Consulta completa de dados pessoais',
-        method: 'GET',
-        url: '/api/consultas?tipo=cpf&cpf={cpf}&apikey={apikey}',
-        params: [
-            { name: 'tipo', type: 'string', required: true, value: 'cpf' },
-            { name: 'cpf', type: 'string', required: true, description: 'CPF a consultar' },
-            { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
-        ],
-        example: 'curl "http://localhost:8080/api/consultas?tipo=cpf&cpf=12345678901&apikey=SUA_API_KEY"'
-    },
-    {
-        id: 'nome',
-        name: 'Consultar Nome',
-        icon: 'fa-user',
-        description: 'Busca por nome completo',
-        method: 'GET',
-        url: '/api/consultas?tipo=nome&q={query}&apikey={apikey}',
-        params: [
-            { name: 'tipo', type: 'string', required: true, value: 'nome' },
-            { name: 'q', type: 'string', required: true, description: 'Nome completo para buscar' },
-            { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
-        ],
-        example: 'curl "http://localhost:8080/api/consultas?tipo=nome&q=Joao+Silva&apikey=SUA_API_KEY"'
-    },
-    {
-        id: 'numero',
-        name: 'Consultar Telefone',
-        icon: 'fa-phone',
-        description: 'Consulta de dados telefônicos',
-        method: 'GET',
-        url: '/api/consultas?tipo=numero&q={phone}&apikey={apikey}',
-        params: [
-            { name: 'tipo', type: 'string', required: true, value: 'numero' },
-            { name: 'q', type: 'string', required: true, description: 'Número de telefone' },
-            { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
-        ],
-        example: 'curl "http://localhost:8080/api/consultas?tipo=numero&q=11999999999&apikey=SUA_API_KEY"'
+// Endpoints (carregados dinamicamente do servidor)
+let userEndpoints = [];
+
+async function loadEndpointsFromServer() {
+    try {
+        const res = await fetch('/api/docs/endpoints');
+        const data = await res.json();
+        if (!data || !data.success) return;
+
+        const commonParams = {
+            cpf: ['cpf'],
+            nome: ['q'],
+            numero: ['q'],
+            bypass: ['url'],
+            bypasscf: ['url', 'siteKey', 'type', 'proxy'],
+            infoff: ['id'],
+            downloader: ['url'],
+            github: ['username'],
+            gimage: ['q'],
+            pinterest: ['q'],
+            roblox: ['username'],
+            tiktok: ['username'],
+            yt: ['q'],
+            video: ['prompt', 'quality', 'ratio'],
+            nsfw: ['prompt', 'negative']
+        };
+
+        userEndpoints = (data.endpoints || []).map(function(ep) {
+            var id = ep.id;
+            var params = ep.params && ep.params.length ? ep.params : (commonParams[id] || ['q']);
+
+            // Normalizar params (string[])
+            params = params.map(function(p) { return typeof p === 'string' ? p : (p && p.name ? p.name : 'q'); });
+
+            var paramObjs = [{ name: 'tipo', type: 'string', required: true, value: id }]
+                .concat(params.map(function(p) {
+                    return { name: p, type: 'string', required: true, description: 'Parâmetro: ' + p };
+                }))
+                .concat([{ name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }]);
+
+            var icon = 'fa-plug';
+            if (id === 'cpf') icon = 'fa-id-card';
+            if (id === 'nome') icon = 'fa-user';
+            if (id === 'numero') icon = 'fa-phone';
+            if (id === 'video') icon = 'fa-film';
+            if (id === 'nsfw') icon = 'fa-image';
+
+            return {
+                id: id,
+                name: ep.name || id,
+                icon: icon,
+                description: ep.description || (ep.dynamic ? 'Endpoint dinâmico' : 'Endpoint da API'),
+                method: 'GET',
+                url: '/api/consultas?tipo=' + id + '&...&apikey={apikey}',
+                params: paramObjs,
+                example: 'curl "http://localhost:8080/api/consultas?tipo=' + id + '&apikey=SUA_API_KEY"'
+            };
+        });
+
+        // Incluir endpoints estáticos (admin/user) no final
+        (data.static || []).forEach(function(ep) {
+            userEndpoints.push({
+                id: ep.id,
+                name: ep.id,
+                icon: 'fa-lock',
+                description: 'Endpoint do sistema (' + (ep.auth || 'public') + ')',
+                method: ep.method,
+                url: ep.url,
+                params: [{ name: 'apikey', type: 'string', required: ep.auth !== 'public', description: 'Chave de autenticação' }],
+                example: 'curl "http://localhost:8080' + ep.url.replace('{ADMIN_KEY}', 'SUA_ADMIN_KEY') + '"'
+            });
+        });
+    } catch (e) {
+        // fallback: mantém lista vazia
     }
-];
+}
 
 // Renderizar endpoints
 function renderEndpoints() {
