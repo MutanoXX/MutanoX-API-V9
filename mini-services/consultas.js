@@ -92,25 +92,13 @@ async function sendFeedback() {
 function updatePlaceholder() {
     const type = searchType.value;
     const t = translations[currentLang];
-    
+
     const placeholders = {
         cpf: t.placeholderCpf,
         nome: t.placeholderNome,
-        numero: t.placeholderNumero,
-        bypasscf: 'Ex: https://site-com-cloudflare.com',
-        infoff: 'Ex: 123456789',
-        downloader: 'Ex: https://www.youtube.com/watch?v=...',
-        github: 'Ex: mutanox',
-        gimage: 'Ex: Cyberpunk City',
-        pinterest: 'Ex: Anime Wallpaper',
-        roblox: 'Ex: Builderman',
-        tiktok: 'Ex: khaby.lame',
-        yt: 'Ex: Lo-fi hip hop',
-        video: 'Ex: A futuristic city with flying cars',
-        nsfw: 'Ex: Artistic portrait (NSFW allowed)',
-        bypass: 'Ex: https://linkvertise.com/...'
+        numero: t.placeholderNumero
     };
-    
+
     searchQuery.placeholder = placeholders[type] || 'Digite aqui...';
 }
 
@@ -138,10 +126,8 @@ async function performSearch() {
     try {
         let url = `/api/consultas?tipo=${type}`;
         if (type === 'cpf') url += `&cpf=${encodeURIComponent(query)}`;
-        else if (type === 'infoff') url += `&id=${encodeURIComponent(query)}`;
-        else if (type === 'downloader' || type === 'bypasscf' || type === 'bypass') url += `&url=${encodeURIComponent(query)}`;
-        else if (type === 'github' || type === 'roblox' || type === 'tiktok') url += `&username=${encodeURIComponent(query)}`;
-        else if (type === 'video' || type === 'nsfw') url += `&prompt=${encodeURIComponent(query)}`;
+        else if (type === 'nome') url += `&q=${encodeURIComponent(query)}`;
+        else if (type === 'numero') url += `&q=${encodeURIComponent(query)}`;
         else url += `&q=${encodeURIComponent(query)}`;
 
         const res = await fetch(url);
