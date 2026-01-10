@@ -558,6 +558,25 @@ const server = http.createServer(async (req, res) => {
         fs.createReadStream(pathModule.join(__dirname, 'docs', 'api-documentation.js')).pipe(res);
         return;
     }
+    if (path === '/api/docs/endpoints') {
+        const enrichedEndpoints = [];
+        for (const [id, config] of Object.entries(endpointsConfig)) {
+            if (!config.active) continue;
+            enrichedEndpoints.push({
+                id,
+                name: config.name || id,
+                description: config.description || 'Sem descrição',
+                method: 'GET',
+                url: `/api/consultas?tipo=${id}&apikey={apikey}`,
+                params: config.params || [],
+                active: config.active,
+                maintenance: config.maintenance
+            });
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, endpoints: enrichedEndpoints }));
+        return;
+    }
 
     // Admin API
     if (path.startsWith('/api/admin/')) {
@@ -1259,32 +1278,18 @@ function broadcast(data) {
     const message = JSON.stringify(data);
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-            // Se o cliente tiver uma API Key associada (enviada no protocolo ou mensagem inicial), 
-            // poderíamos filtrar dados, mas por enquanto enviamos o estado global de stats
             client.send(message);
         }
     });
 }
 
-// Atualização periódica de estatísticas para todos os clientes conectados
-setInterval(() => {
-    broadcast({
-        type: 'STATS_UPDATE',
-        totalRequests: systemStats.totalRequests,
-        errors: systemStats.errors,
-        uptime: Date.now() - systemStats.startTime,
-        endpointHits: systemStats.endpointHits,
-        health: systemStats.health || [],
-        keys: loadApiKeys() // Opcional: apenas para admin, mas simplificando para o teste
-    });
-}, 5000);
-
-// Monitoramento de Latência Real-time (Usando a função já declarada acima)
-
-// Broadcast stats every 5 seconds
+// Broadcast stats every 5 seconds with complete data
 setInterval(async () => {
     const health = await checkExternalHealth();
     const keys = loadApiKeys();
+    
+    // Count active keys
+    const activeKeysCount = Object.values(keys).filter(k => k.active).length;
     
     // Build endpoint stats for broadcast
     const endpointStats = {};
@@ -1308,6 +1313,7 @@ setInterval(async () => {
         totalRequests: systemStats.totalRequests,
         errors: systemStats.errors,
         uptime: Date.now() - systemStats.startTime,
+        activeKeys: activeKeysCount,
         endpointHits: systemStats.endpointHits,
         endpointStats: endpointStats,
         deviceHits: systemStats.deviceHits,

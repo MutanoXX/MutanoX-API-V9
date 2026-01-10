@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     setLanguage(currentLang);
-    renderEndpoints();
+    loadAndRenderEndpoints();
 });
 
 // Mudar idioma
@@ -114,8 +114,10 @@ window.setLanguage = function(lang) {
         badges[2].innerHTML = '<i class="fas fa-check-circle" style="margin-right: 8px;"></i> ' + t.badgeReliable;
     }
 
-    // Re-renderizar endpoints
-    renderEndpoints();
+    // Re-renderizar endpoints (apenas tradução, não precisa recarregar)
+    if (userEndpoints.length > 0) {
+        renderEndpoints();
+    }
 
     const activeBtn = document.getElementById('btn-' + lang);
     if (activeBtn) activeBtn.style.background = 'var(--primary)';
@@ -171,51 +173,119 @@ window.authenticate = function() {
     }, 500);
 };
 
-// Endpoints de usuários disponíveis (apenas 3 principais)
-const userEndpoints = [
-    {
-        id: 'cpf',
-        name: 'Consultar CPF',
-        icon: 'fa-id-card',
-        description: 'Consulta completa de dados pessoais',
-        method: 'GET',
-        url: '/api/consultas?tipo=cpf&cpf={cpf}&apikey={apikey}',
-        params: [
-            { name: 'tipo', type: 'string', required: true, value: 'cpf' },
-            { name: 'cpf', type: 'string', required: true, description: 'CPF a consultar' },
-            { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
-        ],
-        example: 'curl "http://localhost:8080/api/consultas?tipo=cpf&cpf=12345678901&apikey=SUA_API_KEY"'
-    },
-    {
-        id: 'nome',
-        name: 'Consultar Nome',
-        icon: 'fa-user',
-        description: 'Busca por nome completo',
-        method: 'GET',
-        url: '/api/consultas?tipo=nome&q={query}&apikey={apikey}',
-        params: [
-            { name: 'tipo', type: 'string', required: true, value: 'nome' },
-            { name: 'q', type: 'string', required: true, description: 'Nome completo para buscar' },
-            { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
-        ],
-        example: 'curl "http://localhost:8080/api/consultas?tipo=nome&q=Joao+Silva&apikey=SUA_API_KEY"'
-    },
-    {
-        id: 'numero',
-        name: 'Consultar Telefone',
-        icon: 'fa-phone',
-        description: 'Consulta de dados telefônicos',
-        method: 'GET',
-        url: '/api/consultas?tipo=numero&q={phone}&apikey={apikey}',
-        params: [
-            { name: 'tipo', type: 'string', required: true, value: 'numero' },
-            { name: 'q', type: 'string', required: true, description: 'Número de telefone' },
-            { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
-        ],
-        example: 'curl "http://localhost:8080/api/consultas?tipo=numero&q=11999999999&apikey=SUA_API_KEY"'
+// Global endpoints array to be loaded dynamically
+let userEndpoints = [];
+
+// Icon mapping for endpoints
+const endpointIcons = {
+    'cpf': 'fa-id-card',
+    'nome': 'fa-user',
+    'numero': 'fa-phone',
+    'bypass': 'fa-shield-alt',
+    'bypasscf': 'fa-cloud',
+    'infoff': 'fa-gamepad',
+    'downloader': 'fa-download',
+    'github': 'fa-github',
+    'gimage': 'fa-image',
+    'pinterest': 'fa-pinterest',
+    'roblox': 'fa-robot',
+    'tiktok': 'fa-music',
+    'yt': 'fa-youtube',
+    'video': 'fa-video',
+    'nsfw': 'fa-exclamation-triangle',
+    'clima': 'fa-cloud-sun',
+    'cotacao': 'fa-dollar-sign',
+    'qrcode': 'fa-qrcode',
+    'shorten': 'fa-link'
+};
+
+// Parameter mapping for common endpoints
+const endpointParamMapping = {
+    'cpf': [
+        { name: 'tipo', type: 'string', required: true, value: 'cpf' },
+        { name: 'cpf', type: 'string', required: true, description: 'CPF a consultar' },
+        { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
+    ],
+    'nome': [
+        { name: 'tipo', type: 'string', required: true, value: 'nome' },
+        { name: 'q', type: 'string', required: true, description: 'Nome completo para buscar' },
+        { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
+    ],
+    'numero': [
+        { name: 'tipo', type: 'string', required: true, value: 'numero' },
+        { name: 'q', type: 'string', required: true, description: 'Número de telefone' },
+        { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
+    ]
+};
+
+// Load endpoints dynamically from backend
+async function loadAndRenderEndpoints() {
+    try {
+        const response = await fetch('/api/docs/endpoints');
+        const data = await response.json();
+        
+        if (data.success && data.endpoints) {
+            userEndpoints = data.endpoints.map(ep => {
+                const icon = endpointIcons[ep.id] || 'fa-plug';
+                const customParams = endpointParamMapping[ep.id];
+                
+                let params;
+                if (customParams) {
+                    params = customParams;
+                } else if (ep.params && ep.params.length > 0) {
+                    params = [
+                        { name: 'tipo', type: 'string', required: true, value: ep.id },
+                        ...ep.params.map(p => ({ 
+                            name: p, 
+                            type: 'string', 
+                            required: true, 
+                            description: `Parâmetro ${p}` 
+                        })),
+                        { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
+                    ];
+                } else {
+                    params = [
+                        { name: 'tipo', type: 'string', required: true, value: ep.id },
+                        { name: 'q', type: 'string', required: false, description: 'Parâmetro de busca (opcional)' },
+                        { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
+                    ];
+                }
+                
+                return {
+                    id: ep.id,
+                    name: ep.name,
+                    icon: icon,
+                    description: ep.description,
+                    method: ep.method || 'GET',
+                    url: ep.url,
+                    params: params,
+                    example: `curl "${window.location.origin}/api/consultas?tipo=${ep.id}&apikey=SUA_API_KEY"`
+                };
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao carregar endpoints:', error);
+        // Fallback to basic endpoints if loading fails
+        userEndpoints = [
+            {
+                id: 'cpf',
+                name: 'Consultar CPF',
+                icon: 'fa-id-card',
+                description: 'Consulta completa de dados pessoais',
+                method: 'GET',
+                url: '/api/consultas?tipo=cpf&cpf={cpf}&apikey={apikey}',
+                params: [
+                    { name: 'tipo', type: 'string', required: true, value: 'cpf' },
+                    { name: 'cpf', type: 'string', required: true, description: 'CPF a consultar' },
+                    { name: 'apikey', type: 'string', required: true, description: 'Sua API Key' }
+                ],
+                example: 'curl "http://localhost:8080/api/consultas?tipo=cpf&cpf=12345678901&apikey=SUA_API_KEY"'
+            }
+        ];
     }
-];
+    
+    renderEndpoints();
+}
 
 // Renderizar endpoints
 function renderEndpoints() {
@@ -237,7 +307,7 @@ function renderEndpoints() {
         return '<div class="endpoint-card" id="endpoint-' + endpoint.id + '">' +
             '<div class="endpoint-header">' +
                 '<div class="endpoint-icon">' +
-                    '<i class="' + (endpoint.icon.startsWith('fa-') ? endpoint.icon : 'fas ' + endpoint.icon) + '"></i>' +
+                    '<i class="fas ' + endpoint.icon + '"></i>' +
                 '</div>' +
                 '<div class="endpoint-title">' +
                     '<h4>' + trans.name + '</h4>' +

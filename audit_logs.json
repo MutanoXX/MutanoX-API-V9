@@ -1,5 +1,19 @@
 [
   {
+    "timestamp": "2026-01-10T20:09:24.920Z",
+    "apiKey": "MutanoX3...",
+    "type": "QUERY",
+    "action": "cpf",
+    "details": "Query: 12345678901"
+  },
+  {
+    "timestamp": "2026-01-10T20:04:42.569Z",
+    "apiKey": "MutanoX3...",
+    "type": "QUERY",
+    "action": "cpf",
+    "details": "Query: 12345678901"
+  },
+  {
     "timestamp": "2026-01-09T15:02:03.196Z",
     "apiKey": "MutanoX3...",
     "type": "QUERY",
