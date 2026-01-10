@@ -74,6 +74,9 @@ function initWebSocket() {
 
     socket.onopen = () => {
         console.log('WebSocket connected');
+        try {
+            if (adminKey) socket.send(JSON.stringify({ type: 'AUTH', apiKey: adminKey }));
+        } catch (e) {}
         showNotification('Conectado ao servidor em tempo real', 'success');
     };
 
@@ -290,7 +293,8 @@ function initCharts() {
 function updateStats(data) {
     document.getElementById('stat-total').innerText = data.totalRequests.toLocaleString();
     document.getElementById('stat-errors').innerText = data.errors;
-    document.getElementById('stat-keys').innerText = Object.keys(data.keys).length;
+    const activeKeys = data.keys ? Object.values(data.keys).filter(k => k && k.active !== false).length : 0;
+    document.getElementById('stat-keys').innerText = activeKeys;
     const uptime = Math.floor(data.uptime / 1000);
     const h = Math.floor(uptime / 3600);
     const m = Math.floor((uptime % 3600) / 60);
@@ -971,7 +975,7 @@ async function refreshAutoDocs() {
     } catch (e) { showNotification('Erro ao sincronizar documentação', 'error'); }
 }
 
-function showSection(section) {
+function showSectionLegacy(section) {
     const sections = document.querySelectorAll('.content-section');
     sections.forEach(s => s.classList.remove('active'));
     document.getElementById(`section-${section}`).classList.add('active');
@@ -986,7 +990,7 @@ function showSection(section) {
     if (section === 'audit') loadAudit();
 }
 
-function updateStats() {
+function loadCustomization() {
     fetch(`/api/admin/stats?apikey=${adminKey}`)
         .then(res => res.json())
         .then(data => {

@@ -40,6 +40,50 @@ const translations = {
 
 let currentLang = localStorage.getItem('mutanox_lang') || 'pt';
 
+// Sessão segura do mini-service (não usa API_KEY em querystring)
+const SESSION_STORAGE_KEY = 'mutanox_ms_consultas_session_v1';
+let miniServiceSessionId = null;
+let miniServiceSessionExpiresAt = 0;
+
+function loadStoredSession() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || 'null');
+        if (raw && raw.sessionId && raw.expiresAt && Date.now() < raw.expiresAt) {
+            miniServiceSessionId = raw.sessionId;
+            miniServiceSessionExpiresAt = raw.expiresAt;
+        }
+    } catch (e) {}
+}
+
+function storeSession(sessionId, expiresIn) {
+    miniServiceSessionId = sessionId;
+    miniServiceSessionExpiresAt = Date.now() + expiresIn - 5000;
+    try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ sessionId, expiresAt: miniServiceSessionExpiresAt }));
+    } catch (e) {}
+}
+
+async function ensureMiniServiceSession(force = false) {
+    if (!force) {
+        if (!miniServiceSessionId) loadStoredSession();
+        if (miniServiceSessionId && Date.now() < miniServiceSessionExpiresAt) return miniServiceSessionId;
+    }
+
+    const res = await fetch('/api/mini-service/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId: 'consultas' })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!data || !data.success || !data.sessionId) {
+        throw new Error(data.error || 'Falha ao autenticar mini-service');
+    }
+
+    storeSession(data.sessionId, data.expiresIn || 1800000);
+    return miniServiceSessionId;
+}
+
 function setLanguage(lang) {
     currentLang = lang;
     localStorage.setItem('mutanox_lang', lang);
@@ -54,12 +98,22 @@ function setLanguage(lang) {
 }
 
 // Inicializar com o idioma salvo e detecção automática
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const userLang = navigator.language || navigator.userLanguage;
     if (!localStorage.getItem('mutanox_lang')) {
         currentLang = userLang.startsWith('pt') ? 'pt' : 'en';
     }
     setLanguage(currentLang);
+
+    try {
+        await ensureMiniServiceSession();
+    } catch (e) {
+        if (searchBtn) searchBtn.disabled = true;
+        if (resultsContainer) {
+            resultsContainer.style.display = 'block';
+            resultsContainer.innerHTML = `<div class="result-card" style="border-color: var(--danger); color: var(--danger); text-align:center;">${e.message || 'Falha ao conectar com o servidor.'}</div>`;
+        }
+    }
 });
 
 let currentRating = 0;
@@ -105,10 +159,8 @@ function updatePlaceholder() {
 searchType.addEventListener('change', updatePlaceholder);
 
 async function checkStatus() {
-    try {
-        const res = await fetch('/api/admin/stats?apikey=MutanoX3397'); // Apenas para checar se o servidor está on
-        // No sistema real, o admin controla se o free está ativo
-    } catch (e) {}
+    // Mantido por compatibilidade (não utiliza adminKey no frontend)
+    return true;
 }
 
 async function performSearch() {
@@ -130,8 +182,20 @@ async function performSearch() {
         else if (type === 'numero') url += `&q=${encodeURIComponent(query)}`;
         else url += `&q=${encodeURIComponent(query)}`;
 
-        const res = await fetch(url);
+        await ensureMiniServiceSession();
+
+        const res = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${miniServiceSessionId}`
+            }
+        });
         
+        if (res.status === 401) {
+            // Sessão expirada (renova e tenta novamente uma vez)
+            await ensureMiniServiceSession(true);
+            return performSearch();
+        }
+
         if (res.status === 429) {
             document.getElementById('queue-status').style.display = 'flex';
             setTimeout(performSearch, 3000);
