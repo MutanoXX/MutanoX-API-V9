@@ -442,23 +442,29 @@
 
             <!-- Mini Service Section -->
             <div id="section-miniservice" class="content-section">
-                <div class="header"><h2>Controle do Mini Service</h2></div>
+                <div class="header">
+                    <h2>Controle do Mini Service</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn btn-primary" onclick="loadMiniServices()"><i class="fas fa-sync"></i> Atualizar</button>
+                        <button class="btn btn-primary" style="background: var(--secondary);" onclick="openAddMiniServiceModal()"><i class="fas fa-plus"></i> Novo Mini Service</button>
+                    </div>
+                </div>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-label">Status Global</div>
-                        <div class="stat-value" id="ms-status">Ativo</div>
+                        <div class="stat-label">Total Requests</div>
+                        <div class="stat-value" id="ms-total-requests">-</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Uso Total (Free)</div>
-                        <div class="stat-value" id="ms-usage">0</div>
+                        <div class="stat-label">Daily Requests</div>
+                        <div class="stat-value" id="ms-daily-requests">-</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Endpoints Ativos</div>
-                        <div class="stat-value" id="ms-active-endpoints">0</div>
+                        <div class="stat-label">Services Ativos</div>
+                        <div class="stat-value" id="ms-enabled">-</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Latência Média</div>
-                        <div class="stat-value" id="ms-avg-latency">0ms</div>
+                        <div class="stat-label">Error Rate Global</div>
+                        <div class="stat-value" id="ms-error-rate">-</div>
                     </div>
                 </div>
                 <div class="charts-grid">
@@ -488,10 +494,9 @@
                     </table>
                 </div>
                 <div class="card">
-                    <div class="card-title"><i class="fas fa-toggle-on"></i> Controles Rápidos</div>
-                    <div class="form-group">
-                        <label class="input-label">Sistema Free</label>
-                        <button class="btn btn-primary" id="btn-toggle-ms" onclick="toggleMiniService()">Desativar Sistema</button>
+                    <div class="card-title"><i class="fas fa-microchip"></i> Mini Services Cadastrados</div>
+                    <div id="miniservices-container" style="margin-top: 20px;">
+                        <!-- Mini services serão renderizados aqui -->
                     </div>
                 </div>
             </div>
@@ -684,31 +689,92 @@
 
             <!-- Database Section -->
             <div id="section-database" class="content-section">
-                <div class="header"><h2>Gerenciamento da Base</h2></div>
-                <div class="card">
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Total de Registros</div>
-                            <div class="stat-value">1.2M+</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Tamanho da Base</div>
-                            <div class="stat-value">450MB</div>
-                        </div>
+                <div class="header">
+                    <h2>Gerenciamento da Base</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn btn-primary" onclick="openAddProtectedModal()"><i class="fas fa-plus"></i> Adicionar Proteção</button>
+                        <button class="btn btn-primary" style="background: var(--secondary);" onclick="loadDatabaseStats()"><i class="fas fa-sync"></i> Atualizar</button>
                     </div>
-                    <div style="display: flex; gap: 10px; margin-top: 20px;">
-                        <button class="btn btn-primary"><i class="fas fa-upload"></i> Importar JSON</button>
-                                   <button class="btn btn-primary" style="background: var(--secondary);" onclick="backupDatabase()"><i class="fas fa-download"></i> Backup Completo</button>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total de Registros</div>
+                        <div class="stat-value" id="db-total-records">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Usuários Protegidos</div>
+                        <div class="stat-value" id="db-protected">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Tamanho da Base</div>
+                        <div class="stat-value" id="db-size">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Última Atualização</div>
+                        <div class="stat-value" id="db-last-update">-</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-shield-alt"></i> Usuários Protegidos</div>
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <input type="text" placeholder="Buscar CPF, nome ou número..." class="form-input" style="flex: 1;" onkeyup="filterTable('protected-users-table', this.value)">
+                    </div>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table id="protected-users-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>CPF</th>
+                                    <th>Nome</th>
+                                    <th>Número</th>
+                                    <th>Status</th>
+                                    <th>Criado em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-database"></i> Ações da Base</div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="backupDatabase()"><i class="fas fa-download"></i> Backup Completo</button>
+                        <button class="btn btn-primary" style="background: var(--secondary);" onclick="exportProtectedUsers()"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                        <button class="btn btn-primary" style="background: var(--danger);" onclick="clearExpiredProtections()"><i class="fas fa-trash"></i> Limpar Expirados</button>
                     </div>
                 </div>
             </div>
 
             <!-- Performance Section -->
             <div id="section-performance" class="content-section">
-                <div class="header"><h2>Performance & Monitoramento</h2></div>
+                <div class="header">
+                    <h2>Performance & Cache</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <button class="btn btn-primary" onclick="loadPerformanceStats()"><i class="fas fa-sync"></i> Atualizar</button>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Cache Size</div>
+                        <div class="stat-value" id="cache-size">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Cache Hits</div>
+                        <div class="stat-value" id="cache-hits">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Cache Misses</div>
+                        <div class="stat-value" id="cache-misses">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Hit Rate</div>
+                        <div class="stat-value" id="cache-hit-rate">-</div>
+                    </div>
+                </div>
                 <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                     <div class="card">
-                        <h3 class="card-title"><i class="fas fa-bolt"></i> Cache em Tempo Real</h3>
+                        <h3 class="card-title"><i class="fas fa-bolt"></i> Controles de Cache</h3>
                         <p style="color: var(--text-muted); margin-bottom: 15px;">Gerencie o armazenamento temporário de dados para máxima velocidade.</p>
                         <div style="display: flex; flex-direction: column; gap: 10px;">
                             <button class="btn btn-primary" onclick="clearSystemCache()"><i class="fas fa-broom"></i> Limpar Todo o Cache</button>
@@ -722,21 +788,35 @@
                         </div>
                     </div>
                     <div class="card">
-                        <h3 class="card-title"><i class="fas fa-globe"></i> Latência por Região</h3>
-                        <div id="latency-monitor" style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>América do Sul (São Paulo)</span>
-                                <span class="badge badge-success">12ms</span>
+                        <h3 class="card-title"><i class="fas fa-memory"></i> Uso de Memória</h3>
+                        <div style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+                            <div>
+                                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">Memória Usada</div>
+                                <div style="font-weight: 800; color: var(--primary); font-size: 20px;" id="memory-used">-</div>
                             </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>América do Norte (Virgínia)</span>
-                                <span class="badge badge-warning">145ms</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Europa (Frankfurt)</span>
-                                <span class="badge badge-danger">210ms</span>
+                            <div>
+                                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 5px;">Memória Total</div>
+                                <div style="font-weight: 800; color: var(--secondary); font-size: 20px;" id="memory-total">-</div>
                             </div>
                         </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fas fa-table"></i> Entradas do Cache</div>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table id="cache-table">
+                            <thead>
+                                <tr>
+                                    <th>Chave</th>
+                                    <th>Tamanho</th>
+                                    <th>TTL</th>
+                                    <th>Hits</th>
+                                    <th>Criado em</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -836,6 +916,57 @@
         </div>
     </div>
 
+    <!-- Add Protected User Modal -->
+    <div id="add-protected-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 20px;">Adicionar Proteção</h3>
+            <div class="form-group">
+                <label class="input-label">CPF (opcional)</label>
+                <input type="text" id="add-protected-cpf" class="form-input" placeholder="000.000.000-00">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Nome Completo (opcional)</label>
+                <input type="text" id="add-protected-nome" class="form-input" placeholder="Nome da pessoa">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Número/Telefone (opcional)</label>
+                <input type="text" id="add-protected-numero" class="form-input" placeholder="11999999999">
+            </div>
+            <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 15px;">Preencha pelo menos um campo para proteger.</p>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="addProtectedUser()">Adicionar Proteção</button>
+                <button class="btn" onclick="closeModal('add-protected-modal')">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mini Service Settings Modal -->
+    <div id="ms-settings-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 20px;">Configurar Mini Service</h3>
+            <input type="hidden" id="ms-settings-id">
+            <div class="form-group">
+                <label class="input-label">Nome</label>
+                <input type="text" id="ms-settings-name" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Rate Limit (requisições por minuto)</label>
+                <input type="number" id="ms-settings-rateLimit" class="form-input" value="10">
+            </div>
+            <div class="form-group">
+                <label class="input-label">Permitir Acesso Gratuito</label>
+                <select id="ms-settings-allowFree" class="form-input">
+                    <option value="true">Sim</option>
+                    <option value="false">Não</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="saveMiniServiceSettings()">Salvar Configurações</button>
+                <button class="btn" onclick="closeModal('ms-settings-modal')">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Endpoint Detail Modal -->
     <div id="endpoint-detail-modal" class="modal">
         <div class="modal-content" style="max-width: 900px;">
@@ -911,5 +1042,6 @@
     </div>
 
     <script src="/admin/dashboard-new.js"></script>
+    <script src="/admin/dashboard-enhanced.js"></script>
 </body>
 </html>

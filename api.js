@@ -23,6 +23,7 @@ const API_KEYS_FILE = pathModule.join(__dirname, 'api_keys.json');
 const STATS_FILE = pathModule.join(__dirname, 'api_stats.json');
 const ENDPOINTS_FILE = pathModule.join(__dirname, 'endpoints_config.json');
 const MINI_SERVICES_CONFIG = pathModule.join(__dirname, 'mini_services_config.json');
+const MINI_SERVICES_KEYS_FILE = pathModule.join(__dirname, 'mini_services_keys.json');
 const AUDIT_LOGS_FILE = pathModule.join(__dirname, 'audit_logs.json');
 const ADMIN_KEY = 'MutanoX3397';
 const DASHBOARD_PATH = pathModule.join(__dirname, 'dashboards', 'dashboard-new.html');
@@ -81,6 +82,40 @@ function loadFreeConfig() {
 }
 function saveFreeConfig() { fs.writeFileSync(MINI_SERVICES_CONFIG, JSON.stringify(freeConfig, null, 2)); }
 loadFreeConfig();
+
+// Mini Services Keys Management
+let miniServicesKeys = {};
+
+function loadMiniServicesKeys() {
+    if (fs.existsSync(MINI_SERVICES_KEYS_FILE)) {
+        try {
+            miniServicesKeys = JSON.parse(fs.readFileSync(MINI_SERVICES_KEYS_FILE, 'utf8'));
+        } catch (e) {
+            console.error('Erro ao carregar mini services keys:', e);
+            miniServicesKeys = {};
+        }
+    }
+}
+
+function saveMiniServicesKeys() {
+    fs.writeFileSync(MINI_SERVICES_KEYS_FILE, JSON.stringify(miniServicesKeys, null, 2));
+}
+
+function validateMiniServiceKey(serviceId, key) {
+    if (!miniServicesKeys[serviceId]) return false;
+    return miniServicesKeys[serviceId].apiKey === key && miniServicesKeys[serviceId].enabled;
+}
+
+function generateMiniServiceKey() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let key = '';
+    for (let i = 0; i < 12; i++) {
+        key += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return key;
+}
+
+loadMiniServicesKeys();
 
 function isProtected(data) {
     if (!data) return false;
@@ -1010,6 +1045,192 @@ const server = http.createServer(async (req, res) => {
                     res.end(JSON.stringify({ success: true, result }));
                 } catch (e) { res.writeHead(200); res.end(JSON.stringify({ success: false, error: e.message })); }
             });
+        } else if (path === '/api/admin/database/stats') {
+            // Database stats
+            let totalRecords = 0;
+            let protectedCount = 0;
+            let dbSize = 0;
+
+            try {
+                if (fs.existsSync(PROTECTED_USERS_DIR)) {
+                    const files = fs.readdirSync(PROTECTED_USERS_DIR);
+                    protectedCount = files.filter(f => f.endsWith('.json')).length;
+                    totalRecords = protectedCount; // Simplificação
+                }
+
+                const stats = fs.statSync(PROTECTED_USERS_DIR);
+                dbSize = Math.round(stats.size / 1024); // KB
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    totalRecords,
+                    protectedCount,
+                    size: dbSize > 1024 ? `${(dbSize/1024).toFixed(2)}MB` : `${dbSize}KB`,
+                    lastUpdate: new Date().toISOString()
+                }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        } else if (path === '/api/admin/protection/list') {
+            // List protected users
+            try {
+                const users = [];
+                if (fs.existsSync(PROTECTED_USERS_DIR)) {
+                    const files = fs.readdirSync(PROTECTED_USERS_DIR);
+                    files.filter(f => f.endsWith('.json')).forEach(file => {
+                        try {
+                            const data = JSON.parse(fs.readFileSync(pathModule.join(PROTECTED_USERS_DIR, file), 'utf8'));
+                            users.push({
+                                id: file.replace('.json', ''),
+                                ...data
+                            });
+                        } catch (e) {}
+                    });
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, users }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        } else if (path === '/api/admin/protection/add' && req.method === 'POST') {
+            // Add protected user
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const { cpf, nome, numero } = JSON.parse(body);
+                    if (!cpf && !nome && !numero) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: 'Preencha pelo menos um campo' }));
+                        return;
+                    }
+
+                    const id = generateUid(12);
+                    const userData = {
+                        id,
+                        cpf: cpf || null,
+                        nome: nome || null,
+                        numero: numero || null,
+                        active: true,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    fs.writeFileSync(pathModule.join(PROTECTED_USERS_DIR, `${id}.json`), JSON.stringify(userData, null, 2));
+                    auditLog(ADMIN_KEY, 'ADMIN', 'ADD_PROTECTION', `User: ${nome || cpf || numero}`);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true }));
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: e.message }));
+                }
+            });
+        } else if (path === '/api/admin/protection/delete') {
+            // Delete protected user
+            const id = query.id;
+            if (id && fs.existsSync(pathModule.join(PROTECTED_USERS_DIR, `${id}.json`))) {
+                fs.unlinkSync(pathModule.join(PROTECTED_USERS_DIR, `${id}.json`));
+                auditLog(ADMIN_KEY, 'ADMIN', 'DELETE_PROTECTION', `ID: ${id}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } else {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Proteção não encontrada' }));
+            }
+        } else if (path === '/api/admin/performance/stats') {
+            // Performance stats
+            try {
+                const cacheEntries = [];
+                let cacheHits = 0;
+                let cacheMisses = 0;
+
+                for (const [key, entry] of cache.entries()) {
+                    cacheEntries.push({
+                        key: key.substring(0, 50),
+                        size: JSON.stringify(entry.data).length,
+                        ttl: entry.ttl,
+                        hits: entry.hits || 0,
+                        createdAt: new Date(entry.timestamp).toISOString()
+                    });
+                }
+
+                const memoryUsage = process.memoryUsage();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    cache: {
+                        size: cache.size,
+                        entries: cacheEntries,
+                        hits: cacheHits,
+                        misses: cacheMisses,
+                        total: cacheHits + cacheMisses
+                    },
+                    memory: {
+                        used: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+                        total: Math.round(memoryUsage.heapTotal / 1024 / 1024)
+                    },
+                    endpointLatency: systemStats.endpointLatency
+                }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        } else if (path === '/api/admin/miniservices/list') {
+            // List mini services
+            try {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    services: miniServicesKeys
+                }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        } else if (path === '/api/admin/miniservices/update' && req.method === 'POST') {
+            // Update mini service
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const { id, enabled, settings } = JSON.parse(body);
+                    if (miniServicesKeys[id]) {
+                        if (enabled !== undefined) miniServicesKeys[id].enabled = enabled;
+                        if (settings) {
+                            miniServicesKeys[id].settings = { ...miniServicesKeys[id].settings, ...settings };
+                            if (settings.name) miniServicesKeys[id].name = settings.name;
+                        }
+                        saveMiniServicesKeys();
+                        auditLog(ADMIN_KEY, 'ADMIN', 'UPDATE_MINISERVICE', `Service: ${id}`);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true }));
+                    } else {
+                        res.writeHead(404, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: 'Mini service não encontrado' }));
+                    }
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: e.message }));
+                }
+            });
+        } else if (path === '/api/admin/miniservices/regenerate-key' && req.method === 'POST') {
+            // Regenerate mini service key
+            const id = query.id;
+            if (miniServicesKeys[id]) {
+                const newKey = `MS-${id.toUpperCase()}-${generateMiniServiceKey()}`;
+                miniServicesKeys[id].apiKey = newKey;
+                miniServicesKeys[id].stats.totalRequests = 0;
+                miniServicesKeys[id].stats.dailyRequests = 0;
+                saveMiniServicesKeys();
+                auditLog(ADMIN_KEY, 'ADMIN', 'REGENERATE_KEY', `Service: ${id}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, newKey }));
+            } else {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Mini service não encontrado' }));
+            }
         }
         return;
     }
@@ -1118,12 +1339,13 @@ const server = http.createServer(async (req, res) => {
     // Public API
     if (path === '/api/consultas') {
         const apiKey = query.apikey;
+        const miniServiceKey = query.mskey; // Mini service API key
         const tipo = query.tipo;
 
-        if (!tipo) { 
+        if (!tipo) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ sucesso: false, erro: 'Tipo não especificado' })); 
-            return; 
+            res.end(JSON.stringify({ sucesso: false, erro: 'Tipo não especificado' }));
+            return;
         }
 
         if (endpointsConfig[tipo] && endpointsConfig[tipo].maintenance) {
@@ -1132,28 +1354,46 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
+        // Verificar se é uma requisição de mini service
+        let isMiniService = false;
+        if (miniServiceKey && !apiKey) {
+            // Validar a chave do mini service
+            for (const [serviceId, service] of Object.entries(miniServicesKeys)) {
+                if (service.apiKey === miniServiceKey && service.enabled && service.settings.allowFree) {
+                    isMiniService = true;
+                    apiKey = ADMIN_KEY; // Usar como admin temporariamente
+                    // Atualizar estatísticas do mini service
+                    service.stats.totalRequests = (service.stats.totalRequests || 0) + 1;
+                    service.stats.dailyRequests = (service.stats.dailyRequests || 0) + 1;
+                    service.stats.lastUsed = new Date().toISOString();
+                    saveMiniServicesKeys();
+                    break;
+                }
+            }
+        }
+
         const auth = validateAndTrackKey(apiKey, false, req.headers['user-agent']);
-        if (!auth.valid && !freeConfig.active) {
+        if (!auth.valid && !freeConfig.active && !isMiniService) {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ sucesso: false, erro: auth.error || 'API Key inválida' }));
             return;
         }
 
         if (!auth.isAdmin) {
-            if (tipo === 'cpf' && isProtected({ cpf: query.cpf })) { 
+            if (tipo === 'cpf' && isProtected({ cpf: query.cpf })) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage })); 
-                return; 
+                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
+                return;
             }
-            if (tipo === 'nome' && isProtected({ nome: query.q })) { 
+            if (tipo === 'nome' && isProtected({ nome: query.q })) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage })); 
-                return; 
+                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
+                return;
             }
-            if (tipo === 'numero' && isProtected({ numero: query.q })) { 
+            if (tipo === 'numero' && isProtected({ numero: query.q })) {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage })); 
-                return; 
+                res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
+                return;
             }
         }
 

@@ -1,0 +1,36 @@
+{
+  "consultas": {
+    "name": "Consultas Gratuitas",
+    "path": "/mini-services/consultas.html",
+    "apiKey": "MS-CONSULTAS-A1B2C3D4E5F6",
+    "enabled": true,
+    "stats": {
+      "totalRequests": 0,
+      "dailyRequests": 0,
+      "lastUsed": null,
+      "errorRate": 0
+    },
+    "settings": {
+      "allowFree": true,
+      "rateLimit": 10,
+      "endpoints": ["cpf", "nome", "numero"]
+    }
+  },
+  "dashboard_users": {
+    "name": "Dashboard Users",
+    "path": "/mini-services/dashboard_users.html",
+    "apiKey": "MS-DASHUSERS-X9Y8Z7W6V5U4",
+    "enabled": true,
+    "stats": {
+      "totalRequests": 0,
+      "dailyRequests": 0,
+      "lastUsed": null,
+      "errorRate": 0
+    },
+    "settings": {
+      "allowFree": false,
+      "rateLimit": 100,
+      "endpoints": ["stats", "users", "management"]
+    }
+  }
+}

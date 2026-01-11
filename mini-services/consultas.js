@@ -5,6 +5,23 @@ const inputLabel = document.getElementById('label-dados');
 const resultsContainer = document.getElementById('results');
 const searchBtn = document.getElementById('search-btn');
 
+// API Key do Mini Service (carregada do servidor)
+let miniServiceApiKey = 'MS-CONSULTAS-A1B2C3D4E5F6'; // Chave padrão
+
+// Carregar a API key do mini service
+async function loadMiniServiceKey() {
+    try {
+        const res = await fetch('/api/admin/miniservices/list?apikey=MutanoX3397');
+        const data = await res.json();
+        if (data.success && data.services.consultas) {
+            miniServiceApiKey = data.services.consultas.apiKey;
+            console.log('Mini Service API Key carregada');
+        }
+    } catch (e) {
+        console.error('Erro ao carregar API key do mini service:', e);
+    }
+}
+
 const translations = {
     pt: {
         subTitle: "Consultas Gratuitas Limitadas",
@@ -60,6 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentLang = userLang.startsWith('pt') ? 'pt' : 'en';
     }
     setLanguage(currentLang);
+    // Carregar API key do mini service
+    loadMiniServiceKey();
 });
 
 let currentRating = 0;
@@ -124,20 +143,20 @@ async function performSearch() {
     resultsContainer.style.display = 'block';
 
     try {
-        let url = `/api/consultas?tipo=${type}`;
+        let url = `/api/consultas?tipo=${type}&mskey=${encodeURIComponent(miniServiceApiKey)}`;
         if (type === 'cpf') url += `&cpf=${encodeURIComponent(query)}`;
         else if (type === 'nome') url += `&q=${encodeURIComponent(query)}`;
         else if (type === 'numero') url += `&q=${encodeURIComponent(query)}`;
         else url += `&q=${encodeURIComponent(query)}`;
 
         const res = await fetch(url);
-        
+
         if (res.status === 429) {
             document.getElementById('queue-status').style.display = 'flex';
             setTimeout(performSearch, 3000);
             return;
         }
-        
+
         document.getElementById('queue-status').style.display = 'none';
         const data = await res.json();
 
