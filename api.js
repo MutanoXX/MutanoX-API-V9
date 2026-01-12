@@ -363,11 +363,95 @@ function auditLog(apiKey, type, action, details) {
     logInfo('AUDIT', `${type}: ${action}`, details);
 }
 
-function generateUid(length = 16) { return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length); }
+// ==========================================
+// INPUT VALIDATION & SANITIZATION
+// ==========================================
+
+const VALIDATION_PATTERNS = {
+    cpf: /^\d{3}\.\d{3}\.\d{3}-\d{2}$/,
+    numero: /^\d{10,11}$/,
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    url: /^https?:\/\/.+/,
+    cpfOnly: /^\d{11}$/,
+    id: /^[a-zA-Z0-9_-]{6,32}$/
+};
+
+function validateAndSanitizeInput(type, value) {
+    if (!isValidString(value)) {
+        return { valid: false, error: 'Valor inválido ou vazio', sanitized: null };
+    }
+
+    let sanitized = value.trim();
+
+    switch (type.toLowerCase()) {
+        case 'cpf':
+            // Remover caracteres não numéricos
+            const cpfOnly = sanitized.replace(/\D/g, '');
+            if (!VALIDATION_PATTERNS.cpfOnly.test(cpfOnly)) {
+                return { valid: false, error: 'CPF inválido', sanitized: null };
+            }
+            // Formatar CPF
+            sanitized = cpfOnly.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+            break;
+
+        case 'numero':
+            // Remover caracteres não numéricos
+            const numOnly = sanitized.replace(/\D/g, '');
+            if (!VALIDATION_PATTERNS.numero.test(numOnly)) {
+                return { valid: false, error: 'Número inválido', sanitized: null };
+            }
+            sanitized = numOnly;
+            break;
+
+        case 'nome':
+            // Remover caracteres perigosos (SQL injection, XSS)
+            sanitized = sanitized
+                .replace(/[<>"'=;]/g, '') // Remove caracteres perigosos
+                .replace(/\s+/g, ' ') // Remove espaços múltiplos
+                .trim();
+            // Verificar tamanho mínimo (2 caracteres)
+            if (sanitized.length < 2) {
+                return { valid: false, error: 'Nome deve ter pelo menos 2 caracteres', sanitized: null };
+            }
+            break;
+
+        case 'email':
+            if (!VALIDATION_PATTERNS.email.test(sanitized)) {
+                return { valid: false, error: 'Email inválido', sanitized: null };
+            }
+            sanitized = sanitized.toLowerCase().trim();
+            break;
+
+        case 'url':
+            if (!VALIDATION_PATTERNS.url.test(sanitized)) {
+                return { valid: false, error: 'URL inválida', sanitized: null };
+            }
+            sanitized = sanitized.trim();
+            break;
+
+        case 'id':
+            if (!VALIDATION_PATTERNS.id.test(sanitized)) {
+                return { valid: false, error: 'ID inválido', sanitized: null };
+            }
+            sanitized = sanitized.trim();
+            break;
+
+        default:
+            // Sanitização genérica
+            sanitized = sanitized.replace(/[<>"'=;]/g, '').trim();
+            break;
+    }
+
+    return { valid: true, sanitized, type };
+}
 
 function sanitizeInput(input) {
+    // Sanitização genérica e agressiva (removendo todos os caracteres perigosos)
     if (typeof input !== 'string') return '';
-    return input.replace(/['";\-=\/*<>]/g, '').trim();
+    return input
+        .replace(/[<>"'=;`\\]/g, '') // Remove todos os caracteres perigosos
+        .replace(/\s+/g, ' ') // Remove espaços múltiplos
+        .trim();
 }
 
 function validateApiKeyFormat(key) {
@@ -637,6 +721,299 @@ async function checkExternalHealth() {
         }
     }
     return results;
+}
+
+// ==========================================
+// MONITORAMENTO DE SAÚDE DO SISTEMA (SYSTEM HEALTH MONITORING)
+// ==========================================
+
+const SYSTEM_HEALTH = {
+    startTime: Date.now(),
+    lastCheck: Date.now(),
+    checks: {
+        apiExternal: { status: 'UNKNOWN', latency: 0, lastError: null },
+        cache: { status: 'UNKNOWN', entries: 0 },
+        memory: { status: 'UNKNOWN', usage: 0 },
+        database: { status: 'UNKNOWN', connected: false },
+        websocket: { status: 'UNKNOWN', clients: 0 }
+    }
+};
+
+// Verificar saúde do sistema a cada 60 segundos
+setInterval(async () => {
+    try {
+        SYSTEM_HEALTH.lastCheck = Date.now();
+
+        // 1. Verificar APIs externas
+        const externalHealth = await checkExternalHealth();
+        SYSTEM_HEALTH.checks.apiExternal = {
+            status: externalHealth.every(t => t.status === 'ONLINE') ? 'HEALTHY' : 'DEGRADED',
+            latency: externalHealth.reduce((sum, t) => sum + (t.latency > 0 ? t.latency : 0), 0) / externalHealth.length,
+            details: externalHealth,
+            lastError: externalHealth.find(t => t.status === 'OFFLINE')?.name || null
+        };
+
+        // 2. Verificar cache
+        SYSTEM_HEALTH.checks.cache = {
+            status: cache.size > 0 ? 'HEALTHY' : 'EMPTY',
+            entries: cache.size
+        };
+
+        // 3. Verificar memória
+        const memUsage = process.memoryUsage();
+        const memPercent = (memUsage.heapUsed / memUsage.heapTotal) * 100;
+        SYSTEM_HEALTH.checks.memory = {
+            status: memPercent < 80 ? 'HEALTHY' : (memPercent < 90 ? 'WARNING' : 'CRITICAL'),
+            usage: Math.round(memPercent),
+            heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
+            heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB'
+        };
+
+        // 4. Verificar WebSocket
+        const wsClients = wss.clients ? wss.clients.size : 0;
+        SYSTEM_HEALTH.checks.websocket = {
+            status: wsClients > 0 ? 'HEALTHY' : 'EMPTY',
+            clients: wsClients
+        };
+
+        // 5. Verificar taxa de erro
+        const totalRequests = systemStats.totalRequests || 0;
+        const totalErrors = systemStats.errors || 0;
+        const errorRate = totalRequests > 0 ? ((totalErrors / totalRequests) * 100).toFixed(2) : '0.00';
+        SYSTEM_HEALTH.checks.errorRate = {
+            status: errorRate < 5 ? 'HEALTHY' : (errorRate < 10 ? 'WARNING' : 'CRITICAL'),
+            rate: parseFloat(errorRate),
+            totalRequests,
+            totalErrors
+        };
+
+        // 6. Calcular uptime
+        const uptime = Date.now() - SYSTEM_HEALTH.startTime;
+        const uptimeSeconds = Math.floor(uptime / 1000);
+        const uptimeDays = Math.floor(uptimeSeconds / 86400);
+        const uptimeHours = Math.floor((uptimeSeconds % 86400) / 3600);
+        const uptimeMinutes = Math.floor((uptimeSeconds % 3600) / 60);
+
+        SYSTEM_HEALTH.uptime = {
+            days: uptimeDays,
+            hours: uptimeHours,
+            minutes: uptimeMinutes,
+            milliseconds: uptime,
+            formatted: `${uptimeDays}d ${uptimeHours}h ${uptimeMinutes}m`
+        };
+
+        // Log de saúde do sistema
+        const overallHealth = Object.values(SYSTEM_HEALTH.checks)
+            .filter(c => c.status !== 'HEALTHY').length === 0 ? 'HEALTHY' : 'DEGRADED';
+
+        if (overallHealth === 'DEGRADED') {
+            logWarn('SYSTEM_HEALTH', 'Sistema degradado', {
+                checks: SYSTEM_HEALTH.checks,
+                uptime: SYSTEM_HEALTH.uptime.formatted
+            });
+        } else {
+            logDebug('SYSTEM_HEALTH', 'Sistema saudável', {
+                checks: SYSTEM_HEALTH.checks,
+                uptime: SYSTEM_HEALTH.uptime.formatted
+            });
+        }
+
+        // Salvar stats de saúde do sistema
+        saveStats();
+
+    } catch (error) {
+        logError('SYSTEM_HEALTH', 'Erro ao verificar saúde do sistema', error.message);
+    }
+}, 60000); // A cada 60 segundos
+
+// ==========================================
+// INTELLIGENT RATE LIMITING SYSTEM
+// ==========================================
+
+const RATE_LIMIT_CONFIG = {
+    // Limites globais
+    global: {
+        requestsPerMinute: 60,
+        requestsPerHour: 1000,
+        requestsPerDay: 10000
+    },
+    // Limites por endpoint
+    endpoint: {
+        'cpf': { requestsPerMinute: 10, requestsPerHour: 100 },
+        'nome': { requestsPerMinute: 10, requestsPerHour: 100 },
+        'numero': { requestsPerMinute: 10, requestsPerHour: 100 },
+        'default': { requestsPerMinute: 30, requestsPerHour: 300 }
+    },
+    // Limites por tipo de chave (API key vs mini service)
+    keyType: {
+        'admin': { requestsPerMinute: 120, requestsPerHour: 2000 }, // Admin sem limite
+        'standard': { requestsPerMinute: 60, requestsPerHour: 1000 },
+        'mini-service': { requestsPerMinute: 30, requestsPerHour: 300 }
+    },
+    // Janela de tempo em milissegundos
+    windows: {
+        minute: 60000,
+        hour: 3600000,
+        day: 86400000
+    }
+};
+
+// Rastreamento de requests por IP e API key
+const requestTracker = {
+    byIP: new Map(), // IP -> { count, lastReset, history: [], blockedUntil }
+    byKey: new Map(), // API key -> { count, lastReset, history: [], blockedUntil }
+    byIPAndKey: new Map() // "IP:KEY" -> { count, lastReset, blockedUntil }
+};
+
+function checkRateLimit(ip, apiKey, endpoint) {
+    const now = Date.now();
+
+    // 1. Verificar limite por IP
+    const ipLimit = requestTracker.byIP.get(ip);
+    if (!ipLimit) {
+        requestTracker.byIP.set(ip, {
+            count: 1,
+            lastReset: now,
+            history: [now],
+            blockedUntil: null
+        });
+    } else {
+        // Resetar contadores se a janela passou
+        if (now - ipLimit.lastReset > RATE_LIMIT_CONFIG.windows.minute) {
+            ipLimit.count = 1;
+            ipLimit.lastReset = now;
+            ipLimit.history = [now];
+        } else {
+            ipLimit.count++;
+            ipLimit.history.push(now);
+            // Manter apenas últimos 1000 timestamps
+            if (ipLimit.history.length > 1000) {
+                ipLimit.history.shift();
+            }
+        }
+
+        // Verificar se IP está bloqueado
+        if (ipLimit.blockedUntil && now < ipLimit.blockedUntil) {
+            const remaining = Math.ceil((ipLimit.blockedUntil - now) / 1000);
+            return {
+                allowed: false,
+                error: `IP bloqueado por excesso de requests. Tente novamente em ${remaining} segundos.`,
+                retryAfter: remaining,
+                type: 'IP_BLOCKED'
+            };
+        }
+
+        // Verificar limite por minuto
+        if (ipLimit.count > RATE_LIMIT_CONFIG.global.requestsPerMinute) {
+            ipLimit.blockedUntil = now + 60000; // Bloquear por 1 minuto
+            requestTracker.byIP.set(ip, ipLimit);
+            logWarn('RATE_LIMIT', `IP ${ip} bloqueado por excesso de requests (${ipLimit.count}/min)`);
+            return {
+                allowed: false,
+                error: 'Muitas requisições. Por favor, espere um momento.',
+                retryAfter: 60,
+                type: 'IP_LIMIT_EXCEEDED'
+            };
+        }
+    }
+
+    // 2. Verificar limite por API key
+    if (apiKey) {
+        const keyLimit = requestTracker.byKey.get(apiKey);
+        if (!keyLimit) {
+            requestTracker.byKey.set(apiKey, {
+                count: 1,
+                lastReset: now,
+                history: [now],
+                blockedUntil: null
+            });
+        } else {
+            // Resetar contadores se a janela passou
+            if (now - keyLimit.lastReset > RATE_LIMIT_CONFIG.windows.minute) {
+                keyLimit.count = 1;
+                keyLimit.lastReset = now;
+                keyLimit.history = [now];
+            } else {
+                keyLimit.count++;
+                keyLimit.history.push(now);
+                // Manter apenas últimos 1000 timestamps
+                if (keyLimit.history.length > 1000) {
+                    keyLimit.history.shift();
+                }
+            }
+
+            // Verificar se chave está bloqueada
+            if (keyLimit.blockedUntil && now < keyLimit.blockedUntil) {
+                const remaining = Math.ceil((keyLimit.blockedUntil - now) / 1000);
+                return {
+                    allowed: false,
+                    error: `API key bloqueada por excesso de requests. Tente novamente em ${remaining} segundos.`,
+                    retryAfter: remaining,
+                    type: 'KEY_BLOCKED'
+                };
+            }
+
+            // Verificar tipo da chave para aplicar limites específicos
+            const keyData = loadApiKeys()[apiKey];
+            let limitMultiplier = 1;
+
+            if (keyData) {
+                if (keyData.role === 'admin') {
+                    limitMultiplier = Infinity; // Admin sem limite
+                } else if (keyData.role === 'mini-service') {
+                    limitMultiplier = 0.5; // Mini services têm metade do limite
+                }
+            }
+
+            const effectiveLimit = Math.round(RATE_LIMIT_CONFIG.global.requestsPerMinute * limitMultiplier);
+
+            if (keyLimit.count > effectiveLimit) {
+                keyLimit.blockedUntil = now + 60000; // Bloquear por 1 minuto
+                requestTracker.byKey.set(apiKey, keyLimit);
+                logWarn('RATE_LIMIT', `API key ${apiKey.substring(0,8)}... bloqueada por excesso (${keyLimit.count}/min)`);
+                return {
+                    allowed: false,
+                    error: 'Muitas requisições. Por favor, espere um momento.',
+                    retryAfter: 60,
+                    type: 'KEY_LIMIT_EXCEEDED'
+                };
+            }
+        }
+    }
+
+    // 3. Verificar limite específico por endpoint
+    const endpointLimit = RATE_LIMIT_CONFIG.endpoint[endpoint] || RATE_LIMIT_CONFIG.endpoint.default;
+    const combinedKey = `${ip}:${endpoint}`;
+    const combinedLimit = requestTracker.byIPAndKey.get(combinedKey);
+
+    if (!combinedLimit) {
+        requestTracker.byIPAndKey.set(combinedKey, {
+            count: 1,
+            lastReset: now,
+            blockedUntil: null
+        });
+    } else {
+        if (now - combinedLimit.lastReset > RATE_LIMIT_CONFIG.windows.minute) {
+            combinedLimit.count = 1;
+            combinedLimit.lastReset = now;
+        } else {
+            combinedLimit.count++;
+
+            if (combinedLimit.count > endpointLimit.requestsPerMinute) {
+                combinedLimit.blockedUntil = now + 60000;
+                requestTracker.byIPAndKey.set(combinedKey, combinedLimit);
+                logWarn('RATE_LIMIT', `IP+Endpoint ${ip}:${endpoint} bloqueado (${combinedLimit.count}/min)`);
+                return {
+                    allowed: false,
+                    error: `Muitas requisições para este tipo de consulta. Tente novamente em 1 minuto.`,
+                    retryAfter: 60,
+                    type: 'ENDPOINT_LIMIT_EXCEEDED'
+                };
+            }
+        }
+    }
+
+    return { allowed: true };
 }
 
 // ==========================================
