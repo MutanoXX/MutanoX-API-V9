@@ -514,7 +514,7 @@ function parseTelefoneData(text) {
 // Monitor de Saúde
 async function checkExternalHealth() {
     const targets = [
-        { name: 'World Ecletix', url: 'https://world-ecletix.onrender.com' },
+        { name: 'World Ecletix', url: 'https://anabot.my.id' },
         { name: 'AnaBot API', url: 'https://anabot.my.id' },
         { name: 'Paxsenix', url: 'https://api.paxsenix.org' }
     ];
@@ -1619,12 +1619,12 @@ async function consultarCPF(cpf) {
   }
 
   try {
-    const apiUrl = createApiUrl('https://world-ecletix.onrender.com/api/consultarcpf', { cpf });
+    const apiUrl = createApiUrl('https://anabot.my.id/api/consultar-cpf', { cpf });
     if (!apiUrl) throw new Error('URL inválida');
 
     console.log('[consultarCPF] Consultando CPF:', cpf);
     const response = await fetch(apiUrl);
-    
+
     if (!response.ok) throw new Error(`API retornou status ${response.status}`);
 
     const data = await response.json();
@@ -1646,12 +1646,12 @@ async function consultarNome(nome) {
   }
 
   try {
-    const apiUrl = createApiUrl('https://world-ecletix.onrender.com/api/nome-completo', { q: nome });
+    const apiUrl = createApiUrl('https://anabot.my.id/api/consultar-nome', { q: nome });
     if (!apiUrl) throw new Error('URL inválida');
 
     console.log('[consultarNome] Consultando nome:', nome);
     const response = await fetch(apiUrl);
-    
+
     if (!response.ok) throw new Error(`API retornou status ${response.status}`);
 
     const data = await response.json();
@@ -1673,12 +1673,12 @@ async function consultarNumero(numero) {
   }
 
   try {
-    const apiUrl = createApiUrl('https://world-ecletix.onrender.com/api/numero', { q: numero });
+    const apiUrl = createApiUrl('https://anabot.my.id/api/consultar-numero', { q: numero });
     if (!apiUrl) throw new Error('URL inválida');
 
     console.log('[consultarNumero] Consultando número:', numero);
     const response = await fetch(apiUrl);
-    
+
     if (!response.ok) throw new Error(`API retornou status ${response.status}`);
 
     const data = await response.json();
@@ -1800,7 +1800,7 @@ async function consultarInfoFF(id) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    const apiUrl = createApiUrl('https://world-ecletix.onrender.com/api/infoff', { id });
+    const apiUrl = createApiUrl('https://anabot.my.id/api/infoff', { id });
     if (!apiUrl) throw new Error('URL inválida');
 
     const response = await fetch(apiUrl, { method: 'GET', signal: controller.signal });
@@ -1940,7 +1940,7 @@ async function robloxStalk(username, apikey) {
   }
   if (!isValidString(apikey)) apikey = DEFAULT_API_KEY;
   try {
-    const apiUrl = createApiUrl('https://anabot.my.id/api/stalk/roblox', { username, apikey });
+    const apiUrl = createApiUrl('https://anabot.my.id/api/search/robloxStalk', { username, apikey });
     const response = await fetch(apiUrl);
     const data = await response.json();
     return { sucesso: data.success !== undefined ? data.success : true, dados: data, username, criador: '@MutanoX' };
@@ -1955,7 +1955,7 @@ async function tiktokSearch(username, apikey) {
   }
   if (!isValidString(apikey)) apikey = DEFAULT_API_KEY;
   try {
-    const apiUrl = createApiUrl('https://anabot.my.id/api/search/tiktok', { username, apikey });
+    const apiUrl = createApiUrl('https://anabot.my.id/api/search/tiktokSearch', { username, apikey });
     const response = await fetch(apiUrl);
     const data = await response.json();
     return { sucesso: data.success !== undefined ? data.success : true, dados: data, username, criador: '@MutanoX' };
