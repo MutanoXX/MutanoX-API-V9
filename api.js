@@ -1456,6 +1456,9 @@ async function handleApiRequest(req, res, tipo, query, apiKey) {
         return;
     }
 
+    // Log detalhado de cada requisição
+    console.log(`[API REQUEST] ${new Date().toISOString()} - Tipo: ${tipo}, Query: ${query.q || query.cpf || query.id}, MSKey: ${miniServiceKey ? miniServiceKey.substring(0,8) + '...' : 'N/A'}, APIKey: ${apiKey ? apiKey.substring(0,8) + '...' : 'N/A'}`);
+
     let result;
     try {
         // Verificar se é um endpoint dinâmico
@@ -1510,15 +1513,26 @@ async function handleApiRequest(req, res, tipo, query, apiKey) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(result));
     } catch (e) {
+        // Log detalhado do erro para debug
+        console.error(`[API ERROR] Tipo: ${tipo}, Query: ${query.q || query.cpf || query.id}, Erro:`, e.message);
+        console.error('[API ERROR] Stack trace:', e.stack);
+
         systemStats.errors++;
-        
+
         // Track endpoint-specific errors
         if (!systemStats.endpointErrors[tipo]) systemStats.endpointErrors[tipo] = 0;
         systemStats.endpointErrors[tipo]++;
-        
+
         saveStats();
+
+        // SEMPRE retornar JSON, nunca HTML
         res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ sucesso: false, erro: e.message }));
+        res.end(JSON.stringify({
+            sucesso: false,
+            erro: e.message || 'Erro interno do servidor',
+            tipo: tipo,
+            criador: '@MutanoX'
+        }));
     }
 }
 
