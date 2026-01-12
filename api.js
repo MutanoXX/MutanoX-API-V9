@@ -232,6 +232,8 @@ function wafMiddleware(req, res) {
 
 // --- CACHE SYSTEM ---
 const cache = new Map(); // endpoint -> { data, timestamp, ttl }
+const CACHE_TTL = 300000; // 5 minutos (aumentado para melhor performance)
+const REQUEST_TIMEOUT = 30000; // 30 segundos timeout para APIs externas
 
 function getCache(key) {
     const entry = cache.get(key);
@@ -243,7 +245,7 @@ function getCache(key) {
     return entry.data;
 }
 
-function setCache(key, data, ttl = 60000) {
+function setCache(key, data, ttl = CACHE_TTL) {
     cache.set(key, { data, timestamp: Date.now(), ttl });
 }
 
@@ -280,16 +282,75 @@ function saveStats() {
 }
 loadStats();
 
+// ==========================================
+// LOGGING SYSTEM - DETALHADO E ESTRUTURADO
+// ==========================================
+
+const LOG_LEVELS = {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+    CRITICAL: 4
+};
+
+let currentLogLevel = LOG_LEVELS.INFO; // Nível de log padrão
+
+function log(level, type, message, details = null) {
+    if (level < currentLogLevel) return;
+
+    const timestamp = new Date().toLocaleString('pt-BR');
+    const levelStr = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL'][level];
+    const coloredMessage = level === LOG_LEVELS.ERROR || level === LOG_LEVELS.CRITICAL
+        ? `\x1b[31m${message}\x1b[0m` // Vermelho para erros
+        : message;
+
+    liveLogs.unshift({ timestamp, type, level: levelStr, message: coloredMessage, details });
+    if (liveLogs.length > 50) liveLogs.pop();
+
+    // Logs de erro sempre vão para console.error
+    if (level >= LOG_LEVELS.ERROR) {
+        console.error(`[${timestamp}] [${levelStr}] [${type}] ${message}`, details || '');
+    } else if (level === LOG_LEVELS.WARN) {
+        console.warn(`[${timestamp}] [${levelStr}] [${type}] ${message}`, details || '');
+    } else {
+        console.log(`[${timestamp}] [${levelStr}] [${type}] ${message}`, details ? `(${details})` : '');
+    }
+}
+
+function logDebug(type, message, details = null) {
+    log(LOG_LEVELS.DEBUG, 'DEBUG', type, message, details);
+}
+
+function logInfo(type, message, details = null) {
+    log(LOG_LEVELS.INFO, 'INFO', type, message, details);
+}
+
+function logWarn(type, message, details = null) {
+    log(LOG_LEVELS.WARN, 'WARN', type, message, details);
+}
+
+function logError(type, message, details = null) {
+    log(LOG_LEVELS.ERROR, 'ERROR', type, message, details);
+}
+
+function logCritical(type, message, details = null) {
+    log(LOG_LEVELS.CRITICAL, 'CRITICAL', type, message, details);
+}
+
 // Auditoria Persistente
 function auditLog(apiKey, type, action, details) {
     const logEntry = {
+        id: crypto.randomBytes(8).toString('hex'),
         timestamp: new Date().toISOString(),
         apiKey: apiKey ? (apiKey.substring(0, 8) + '...') : 'PUBLIC',
         type,
         action,
-        details
+        details,
+        ip: req?.socket.remoteAddress || req?.headers['x-forwarded-for'] || 'N/A',
+        userAgent: req?.headers['user-agent'] || 'N/A'
     };
-    
+
     let logs = [];
     if (fs.existsSync(AUDIT_LOGS_FILE)) {
         try { logs = JSON.parse(fs.readFileSync(AUDIT_LOGS_FILE, 'utf8')); } catch (e) {}
@@ -297,17 +358,9 @@ function auditLog(apiKey, type, action, details) {
     logs.unshift(logEntry);
     if (logs.length > 1000) logs.pop();
     fs.writeFileSync(AUDIT_LOGS_FILE, JSON.stringify(logs, null, 2));
-    // Também adicionar aos liveLogs para o dashboard admin
-    const timestamp = new Date().toLocaleString('pt-BR');
-    liveLogs.unshift({ timestamp, type, message: action, details });
-    if (liveLogs.length > 50) liveLogs.pop();
-}
 
-function log(type, message, details = null) {
-    const timestamp = new Date().toLocaleString('pt-BR');
-    liveLogs.unshift({ timestamp, type, message, details });
-    if (liveLogs.length > 50) liveLogs.pop();
-    console.log(`[${timestamp}] [${type}] ${message} ${details ? '(' + details + ')' : ''}`);
+    // Log também nos liveLogs
+    logInfo('AUDIT', `${type}: ${action}`, details);
 }
 
 function generateUid(length = 16) { return crypto.randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length); }
@@ -401,6 +454,57 @@ function validateAndTrackKey(key, skipIncrement = false, userAgent = '') {
     }
     
     return { valid: true, isAdmin: keyData.role === 'admin', owner: keyData.owner };
+}
+
+// ==========================================
+// RETRY SYSTEM WITH EXPONENTIAL BACKOFF
+// ==========================================
+
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000; // 1 segundo
+const RETRY_DELAY_MULTIPLIER = 2; // Dobra o delay a cada retry (1s, 2s, 4s)
+
+async function fetchWithRetry(url, options = {}, retries = MAX_RETRIES) {
+    let lastError;
+    let delay = INITIAL_RETRY_DELAY;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            // Verificar se a resposta é OK
+            if (response.ok) {
+                const data = await response.json();
+                return data;
+            } else if (response.status === 429) {
+                // Rate limiting - esperar mais tempo
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                continue;
+            } else {
+                throw new Error(`API retornou status ${response.status}`);
+            }
+        } catch (error) {
+            lastError = error;
+            console.warn(`[Retry System] Attempt ${attempt + 1}/${retries + 1} failed:`, error.message);
+
+            if (attempt < retries) {
+                console.log(`[Retry System] Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= RETRY_DELAY_MULTIPLIER;
+            }
+        }
+    }
+
+    // Se todas as tentativas falharam
+    throw new Error(`Todas as ${retries + 1} tentativas falharam. Último erro: ${lastError.message}`);
 }
 
 // ==========================================
@@ -512,6 +616,7 @@ function parseTelefoneData(text) {
 
 
 // Monitor de Saúde
+const HEALTH_CHECK_TIMEOUT = 10000; // 10 segundos (aumentado de 5)
 async function checkExternalHealth() {
     const targets = [
         { name: 'World Ecletix', url: 'https://anabot.my.id' },
@@ -523,7 +628,7 @@ async function checkExternalHealth() {
         const start = Date.now();
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
             const res = await fetch(t.url, { method: 'GET', signal: controller.signal });
             clearTimeout(timeoutId);
             results.push({ name: t.name, status: 'ONLINE', latency: Date.now() - start });
@@ -1614,6 +1719,7 @@ server.listen(PORT, HOST, () => {
 });
 async function consultarCPF(cpf) {
   if (!isValidString(cpf)) {
+    logWarn('VALIDATION', 'CPF inválido ou vazio');
     return { sucesso: false, erro: 'CPF inválido ou vazio', criador: '@MutanoX' };
   }
 
@@ -1621,26 +1727,26 @@ async function consultarCPF(cpf) {
     const apiUrl = createApiUrl('https://anabot.my.id/api/consultar-cpf', { cpf });
     if (!apiUrl) throw new Error('URL inválida');
 
-    console.log('[consultarCPF] Consultando CPF:', cpf);
-    const response = await fetch(apiUrl);
+    logInfo('API_CALL', `Consultando CPF: ${cpf}`);
+    const data = await fetchWithRetry(apiUrl);
 
-    if (!response.ok) throw new Error(`API retornou status ${response.status}`);
-
-    const data = await response.json();
     if (!data || !data.resultado) {
+      logWarn('API_RESPONSE', 'Resposta inválida da API', data);
       return { sucesso: false, erro: 'Resposta inválida da API', resposta: data, criador: '@MutanoX' };
     }
 
     const parsedData = parseCPFData(data.resultado);
+    logInfo('API_SUCCESS', `CPF consultado com sucesso`, { dadosBasicos: parsedData.dadosBasicos.nome });
     return { sucesso: true, dados: parsedData, criador: '@MutanoX' };
   } catch (error) {
-    console.error('[consultarCPF] Erro:', error.message);
+    logError('API_ERROR', `Erro ao consultar CPF: ${cpf}`, error.message);
     return { sucesso: false, erro: error.message, criador: '@MutanoX' };
   }
 }
 
 async function consultarNome(nome) {
   if (!isValidString(nome)) {
+    logWarn('VALIDATION', 'Nome inválido ou vazio');
     return { sucesso: false, erro: 'Nome inválido ou vazio', criador: '@MutanoX' };
   }
 
@@ -1648,26 +1754,26 @@ async function consultarNome(nome) {
     const apiUrl = createApiUrl('https://anabot.my.id/api/consultar-nome', { q: nome });
     if (!apiUrl) throw new Error('URL inválida');
 
-    console.log('[consultarNome] Consultando nome:', nome);
-    const response = await fetch(apiUrl);
+    logInfo('API_CALL', `Consultando nome: ${nome}`);
+    const data = await fetchWithRetry(apiUrl);
 
-    if (!response.ok) throw new Error(`API retornou status ${response.status}`);
-
-    const data = await response.json();
     if (!data || !data.resultado) {
+      logWarn('API_RESPONSE', 'Resposta inválida da API', data);
       return { sucesso: false, erro: 'Resposta inválida da API', resposta: data, criador: '@MutanoX' };
     }
 
     const parsedData = parseNomeData(data.resultado);
+    logInfo('API_SUCCESS', `Nome consultado com sucesso: ${parsedData.length} resultados`, { count: parsedData.length });
     return { sucesso: true, totalResultados: parsedData.length, resultados: parsedData, criador: '@MutanoX' };
   } catch (error) {
-    console.error('[consultarNome] Erro:', error.message);
+    logError('API_ERROR', `Erro ao consultar nome: ${nome}`, error.message);
     return { sucesso: false, erro: error.message, criador: '@MutanoX' };
   }
 }
 
 async function consultarNumero(numero) {
   if (!isValidString(numero)) {
+    logWarn('VALIDATION', 'Número inválido ou vazio');
     return { sucesso: false, erro: 'Número inválido ou vazio', criador: '@MutanoX' };
   }
 
@@ -1675,20 +1781,19 @@ async function consultarNumero(numero) {
     const apiUrl = createApiUrl('https://anabot.my.id/api/consultar-numero', { q: numero });
     if (!apiUrl) throw new Error('URL inválida');
 
-    console.log('[consultarNumero] Consultando número:', numero);
-    const response = await fetch(apiUrl);
+    logInfo('API_CALL', `Consultando número: ${numero}`);
+    const data = await fetchWithRetry(apiUrl);
 
-    if (!response.ok) throw new Error(`API retornou status ${response.status}`);
-
-    const data = await response.json();
     if (!data || !data.resultado) {
+      logWarn('API_RESPONSE', 'Resposta inválida da API', data);
       return { sucesso: false, erro: 'Resposta inválida da API', resposta: data, criador: '@MutanoX' };
     }
 
     const parsedData = parseTelefoneData(data.resultado);
+    logInfo('API_SUCCESS', `Número consultado com sucesso: ${parsedData.length} resultados`, { count: parsedData.length });
     return { sucesso: true, totalResultados: parsedData.length, resultados: parsedData, criador: '@MutanoX' };
   } catch (error) {
-    console.error('[consultarNumero] Erro:', error.message);
+    logError('API_ERROR', `Erro ao consultar número: ${numero}`, error.message);
     return { sucesso: false, erro: error.message, criador: '@MutanoX' };
   }
 }
