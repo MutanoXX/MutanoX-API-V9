@@ -192,7 +192,17 @@ async function performSearch() {
             requestUrl += `&q=${encodeURIComponent(query)}`;
         }
 
-        const res = await fetch(requestUrl);
+        console.log('Fazendo requisição para:', requestUrl);
+
+        const res = await fetch(requestUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        console.log('Status da resposta:', res.status);
 
         if (res.status === 429) {
             queueStatus.style.display = 'flex';
@@ -201,11 +211,31 @@ async function performSearch() {
             return;
         }
 
-        const data = await res.json();
+        // Verificar se a resposta é HTML (erro de servidor)
+        const contentType = res.headers.get('content-type');
+        const responseText = await res.text();
+
+        console.log('Content-Type:', contentType);
+        console.log('Resposta recebida (primeiros 200 chars):', responseText.substring(0, 200));
+
+        // Verificar se é HTML
+        if (contentType && contentType.includes('text/html')) {
+            throw new Error('O servidor retornou uma página HTML em vez de dados JSON. Verifique os logs do servidor.');
+        }
+
+        // Verificar se parece HTML
+        if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+            throw new Error('Resposta inválida do servidor (HTML recebido em vez de JSON).');
+        }
+
+        // Tentar fazer parse como JSON
+        const data = JSON.parse(responseText);
         setLoading(false);
 
         if (data.sucesso === false) {
-            showToast(data.erro || translations[currentLang].errorOccurred, 'error');
+            const errorMsg = data.erro || data.mensagem || translations[currentLang].errorOccurred;
+            console.error('Erro na consulta:', errorMsg);
+            showToast(errorMsg, 'error');
         } else {
             showToast('Consulta realizada com sucesso!', 'success');
 
@@ -230,14 +260,23 @@ async function performSearch() {
         }
     } catch (e) {
         console.error('Erro na consulta:', e);
+        console.error('Detalhes do erro:', {
+            message: e.message,
+            stack: e.stack
+        });
 
-        // Verificar se é erro de rede/bloqueio
-        if (e.name === 'TypeError' && e.message.includes('Failed to fetch')) {
-            showToast('Erro de conexão. Verifique se algum bloqueador está ativo.', 'error');
+        setLoading(false);
+
+        // Mensagens específicas para diferentes tipos de erro
+        if (e.message.includes('HTML')) {
+            showToast('Erro no servidor. Tente novamente em alguns instantes.', 'error');
+        } else if (e.name === 'SyntaxError' && e.message.includes('JSON')) {
+            showToast('Erro ao processar resposta do servidor. Tente novamente.', 'error');
+        } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+            showToast('Erro de conexão. Verifique sua internet.', 'error');
         } else {
             showToast(translations[currentLang].errorOccurred, 'error');
         }
-        setLoading(false);
     }
 }
 

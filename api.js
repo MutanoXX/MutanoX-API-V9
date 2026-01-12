@@ -1348,18 +1348,29 @@ const server = http.createServer(async (req, res) => {
     
     // Public API
     if (path === '/api/consultas') {
+        // Adicionar headers CORS e tratamento de erro
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        console.log(`[API] Requisição /api/consultas recebida`);
+        console.log(`[API] URL completa: ${req.url}`);
+        console.log(`[API] Query params:`, query);
+
         const apiKey = query.apikey;
         const miniServiceKey = query.mskey; // Mini service API key
         const tipo = query.tipo;
 
         if (!tipo) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
+            console.log('[API] Erro: Tipo não especificado');
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ sucesso: false, erro: 'Tipo não especificado' }));
             return;
         }
 
         if (endpointsConfig[tipo] && endpointsConfig[tipo].maintenance) {
-            res.writeHead(503, { 'Content-Type': 'application/json' });
+            console.log('[API] Erro: Endpoint em manutenção');
+            res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ sucesso: false, erro: freeConfig.maintenanceMessage }));
             return;
         }
@@ -1367,11 +1378,14 @@ const server = http.createServer(async (req, res) => {
         // Verificar se é uma requisição de mini service
         let isMiniService = false;
         if (miniServiceKey && !apiKey) {
+            console.log(`[API] Tentando autenticar mini service: ${miniServiceKey.substring(0, 8)}...`);
             // Validar a chave do mini service
             for (const [serviceId, service] of Object.entries(miniServicesKeys)) {
                 if (service.apiKey === miniServiceKey && service.enabled && service.settings.allowFree) {
                     isMiniService = true;
                     apiKey = ADMIN_KEY; // Usar como admin temporariamente
+                    console.log(`[API] Mini service autenticado com sucesso: ${serviceId}`);
+
                     // Atualizar estatísticas do mini service
                     service.stats.totalRequests = (service.stats.totalRequests || 0) + 1;
                     service.stats.dailyRequests = (service.stats.dailyRequests || 0) + 1;
@@ -1382,26 +1396,31 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
+        if (!isMiniService) {
+            console.log(`[API] Autenticando com API key padrão: ${apiKey ? apiKey.substring(0, 8) + '...' : 'N/A'}`);
+        }
+
         const auth = validateAndTrackKey(apiKey, false, req.headers['user-agent']);
         if (!auth.valid && !freeConfig.active && !isMiniService) {
-            res.writeHead(401, { 'Content-Type': 'application/json' });
+            console.log('[API] Erro: API Key inválida');
+            res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ sucesso: false, erro: auth.error || 'API Key inválida' }));
             return;
         }
 
         if (!auth.isAdmin) {
             if (tipo === 'cpf' && isProtected({ cpf: query.cpf })) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
                 return;
             }
             if (tipo === 'nome' && isProtected({ nome: query.q })) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
                 return;
             }
             if (tipo === 'numero' && isProtected({ numero: query.q })) {
-                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ sucesso: false, protegido: true, mensagem: freeConfig.protectionMessage }));
                 return;
             }
@@ -1411,14 +1430,17 @@ const server = http.createServer(async (req, res) => {
             // Adicionar à fila se for consulta gratuita
             requestQueue.push({ req, res, tipo, query, apiKey });
             if (requestQueue.length > 10) {
-                res.writeHead(429, { 'Content-Type': 'application/json' });
+                console.log('[API] Erro: Fila cheia');
+                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ sucesso: false, erro: 'Fila cheia, tente novamente em instantes' }));
                 return;
             }
+            console.log(`[API] Adicionado à fila: ${requestQueue.length} itens`);
             processQueue();
             return;
         }
 
+        console.log(`[API] Processando requisição do tipo: ${tipo}`);
         await handleApiRequest(req, res, tipo, query, apiKey);
         return;
     }
