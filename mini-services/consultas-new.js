@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadMiniServiceKey() {
     try {
         // Tentar usar uma key embutida por enquanto o servidor não responde
-        const res = await fetch('/api/admin/miniservices/list?apikey=MutanoX3397');
+        const res = await fetch('/api/admin/miniservice/list?apikey=MutanoX3397');
         const data = await res.json();
 
         if (data.success && data.services && data.services.consultas) {
