@@ -607,11 +607,15 @@ async function loadAudit() {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Dashboard Enhanced JS carregado');
+
     // Carregar dados das seções melhoradas quando elas forem abertas
     const originalShowSection = window.showSection;
     if (originalShowSection) {
         window.showSection = function(sectionId) {
             originalShowSection(sectionId);
+
+            console.log('Seção aberta:', sectionId);
 
             if (sectionId === 'database') {
                 loadDatabaseStats();
@@ -622,7 +626,97 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadMiniServices();
             } else if (sectionId === 'audit') {
                 loadAudit();
+            } else if (sectionId === 'overview') {
+                // Forcar atualização das estatísticas
+                setTimeout(() => {
+                    forceUpdateStats();
+                }, 1000);
             }
         };
     }
+
+    // Monitorar WebSocket e atualizar estatísticas
+    if (window.socket) {
+        const originalOnMessage = window.socket.onmessage;
+        window.socket.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('WebSocket message recebida:', data);
+
+                if (data.type === 'STATS_UPDATE') {
+                    // Atualizar todas as estatísticas
+                    updateStatsEnhanced(data);
+                }
+            } catch (e) {
+                console.error('Error parsing WebSocket message:', e);
+            }
+
+            // Chamar handler original se existir
+            if (originalOnMessage) originalOnMessage(event);
+        };
+    }
+
+    // Forcar atualização inicial após 2 segundos
+    setTimeout(() => {
+        forceUpdateStats();
+    }, 2000);
 });
+
+// Função para forçar atualização das estatísticas
+function forceUpdateStats() {
+    console.log('Forçando atualização de estatísticas...');
+
+    // Tenta buscar estatísticas do servidor
+    fetch(`/api/admin/stats?apikey=${adminKey}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Dados recebidos:', data);
+
+                // Atualizar todos os campos
+                if (document.getElementById('stat-total')) {
+                    document.getElementById('stat-total').innerText = (data.totalRequests || 0).toLocaleString();
+                }
+                if (document.getElementById('stat-errors')) {
+                    document.getElementById('stat-errors').innerText = data.errors || 0;
+                }
+                if (document.getElementById('stat-keys')) {
+                    const keysCount = data.keys ? Object.keys(data.keys).length : 0;
+                    document.getElementById('stat-keys').innerText = keysCount;
+                }
+                if (document.getElementById('stat-uptime')) {
+                    const uptime = data.startTime ? Date.now() - new Date(data.startTime).getTime() : 0;
+                    const uptimeSecs = Math.floor(uptime / 1000);
+                    const h = Math.floor(uptimeSecs / 3600);
+                    const m = Math.floor((uptimeSecs % 3600) / 60);
+                    document.getElementById('stat-uptime').innerText = `${h}h ${m}m`;
+                }
+            }
+        })
+        .catch(e => {
+            console.error('Erro ao buscar estatísticas:', e);
+        });
+}
+
+// Função melhorada de atualização de estatísticas
+function updateStatsEnhanced(data) {
+    console.log('Atualizando estatísticas com dados:', data);
+
+    if (document.getElementById('stat-total')) {
+        document.getElementById('stat-total').innerText = (data.totalRequests || 0).toLocaleString();
+    }
+    if (document.getElementById('stat-errors')) {
+        document.getElementById('stat-errors').innerText = data.errors || 0;
+    }
+    if (document.getElementById('stat-keys')) {
+        const keysCount = data.keys ? Object.keys(data.keys).length : 0;
+        document.getElementById('stat-keys').innerText = keysCount;
+    }
+    if (document.getElementById('stat-uptime')) {
+        const uptime = data.uptime || 0;
+        const uptimeSecs = Math.floor(uptime / 1000);
+        const h = Math.floor(uptimeSecs / 3600);
+        const m = Math.floor((uptimeSecs % 3600) / 60);
+        document.getElementById('stat-uptime').innerText = `${h}h ${m}m`;
+    }
+}

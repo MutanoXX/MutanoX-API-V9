@@ -580,7 +580,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (path === '/consultas') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        fs.createReadStream(pathModule.join(__dirname, 'mini-services', 'consultas.html')).pipe(res);
+        fs.createReadStream(pathModule.join(__dirname, 'mini-services', 'consultas-new.html')).pipe(res);
+        return;
+    }
+    if (path === '/mini-services/consultas-new.js') {
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+        fs.createReadStream(pathModule.join(__dirname, 'mini-services', 'consultas-new.js')).pipe(res);
         return;
     }
     if (path === '/mini-services/consultas.js' || path === '/consultas/consultas.js') {
