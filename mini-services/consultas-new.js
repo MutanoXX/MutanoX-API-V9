@@ -70,9 +70,13 @@ const queueStatus = document.getElementById('queue-status');
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Consultas Modernas iniciadas');
-    loadLanguage();
-    loadMiniServiceKey();
-    renderHistory();
+
+    // Pequeno delay para garantir que o DOM esteja completamente carregado
+    setTimeout(() => {
+        loadLanguage();
+        loadMiniServiceKey();
+        renderHistory();
+    }, 100);
 });
 
 // Carregar API Key do Mini Service
@@ -114,18 +118,29 @@ function loadLanguage() {
 function applyLanguage(lang) {
     const t = translations[lang];
 
-    document.getElementById('page-title').textContent = t.pageTitle;
-    document.getElementById('page-subtitle').textContent = t.pageSubtitle;
-    document.getElementById('type-label').textContent = t.typeLabel;
-    document.getElementById('input-label').textContent = t.inputLabel;
-    document.getElementById('btn-text').textContent = t.btnText;
-    document.getElementById('results-title-text').textContent = t.resultsTitle;
-    document.getElementById('clear-history-btn').innerHTML = `<i class="fas fa-trash-alt"></i> ${t.clearHistory}`;
-    document.getElementById('empty-state').querySelector('p').textContent = t.emptyState;
-    document.getElementById('empty-state').querySelector('p:last-child').textContent = t.emptyHint;
+    // Verificar se elementos existem antes de manipulá-los
+    const pageTitle = document.getElementById('page-title');
+    const pageSubtitle = document.getElementById('page-subtitle');
+    const typeLabel = document.getElementById('type-label');
+    const inputLabel = document.getElementById('input-label');
+    const btnTextEl = document.getElementById('btn-text');
+    const resultsTitleText = document.getElementById('results-title-text');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const emptyStatePara1 = emptyState.querySelector('p:first-child');
+    const emptyStatePara2 = emptyState.querySelectorAll('p')[1];
+
+    if (pageTitle) pageTitle.textContent = t.pageTitle;
+    if (pageSubtitle) pageSubtitle.textContent = t.pageSubtitle;
+    if (typeLabel) typeLabel.textContent = t.typeLabel;
+    if (inputLabel) inputLabel.textContent = t.inputLabel;
+    if (btnTextEl) btnTextEl.textContent = t.btnText;
+    if (resultsTitleText) resultsTitleText.textContent = t.resultsTitle;
+    if (clearHistoryBtn) clearHistoryBtn.innerHTML = `<i class="fas fa-trash-alt"></i> ${t.clearHistory}`;
+    if (emptyStatePara1) emptyStatePara1.textContent = t.emptyState;
+    if (emptyStatePara2) emptyStatePara2.textContent = t.emptyHint;
 
     const langBtn = document.getElementById('lang-btn');
-    langBtn.innerHTML = `<i class="fas fa-globe"></i> ${lang.toUpperCase()}`;
+    if (langBtn) langBtn.innerHTML = `<i class="fas fa-globe"></i> ${lang.toUpperCase()}`;
 
     updatePlaceholder();
 }
@@ -169,15 +184,15 @@ async function performSearch() {
     queueStatus.style.display = 'none';
 
     try {
-        const url = `/api/consultas?tipo=${type}&mskey=${encodeURIComponent(miniServiceApiKey)}`;
+        let requestUrl = `/api/consultas?tipo=${type}&mskey=${encodeURIComponent(miniServiceApiKey)}`;
 
         if (type === 'cpf') {
-            url += `&cpf=${encodeURIComponent(query)}`;
+            requestUrl += `&cpf=${encodeURIComponent(query)}`;
         } else {
-            url += `&q=${encodeURIComponent(query)}`;
+            requestUrl += `&q=${encodeURIComponent(query)}`;
         }
 
-        const res = await fetch(url);
+        const res = await fetch(requestUrl);
 
         if (res.status === 429) {
             queueStatus.style.display = 'flex';
@@ -215,7 +230,13 @@ async function performSearch() {
         }
     } catch (e) {
         console.error('Erro na consulta:', e);
-        showToast(translations[currentLang].errorOccurred, 'error');
+
+        // Verificar se é erro de rede/bloqueio
+        if (e.name === 'TypeError' && e.message.includes('Failed to fetch')) {
+            showToast('Erro de conexão. Verifique se algum bloqueador está ativo.', 'error');
+        } else {
+            showToast(translations[currentLang].errorOccurred, 'error');
+        }
         setLoading(false);
     }
 }
