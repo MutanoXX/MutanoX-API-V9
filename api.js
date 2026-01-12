@@ -347,8 +347,8 @@ function auditLog(apiKey, type, action, details) {
         type,
         action,
         details,
-        ip: req?.socket.remoteAddress || req?.headers['x-forwarded-for'] || 'N/A',
-        userAgent: req?.headers['user-agent'] || 'N/A'
+        ip: requestIP || 'N/A',
+        userAgent: requestUA || 'N/A'
     };
 
     let logs = [];
@@ -1035,6 +1035,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
     // Static Routes with Correct Content-Type
+// IP e User-Agent para logs de auditoria
+    const requestIP = req?.socket.remoteAddress || req?.headers["x-forwarded-for"];
+    const requestUA = req?.headers["user-agent"];
     if (path === '/admin' || path === '/admin/') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         fs.createReadStream(DASHBOARD_PATH).pipe(res);
@@ -1837,7 +1840,26 @@ const server = http.createServer(async (req, res) => {
 
         console.log(`[API] Requisição /api/consultas recebida`);
         console.log(`[API] URL completa: ${req.url}`);
+        console.log(`[API] IP: ${req?.socket.remoteAddress || req?.headers['x-forwarded-for'] || 'N/A'}`);
+        console.log(`[API] User-Agent: ${req?.headers['user-agent'] || 'N/A'}`);
         console.log(`[API] Query params:`, query);
+
+        // Verificar rate limit antes de processar
+        const ip = req?.socket.remoteAddress || req?.headers['x-forwarded-for'];
+        const rateLimitCheck = checkRateLimit(ip, query.apikey, query.tipo);
+
+        if (!rateLimitCheck.allowed) {
+            console.warn(`[RATE_LIMIT] Blocked request:`, rateLimitCheck);
+            res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({
+                sucesso: false,
+                erro: rateLimitCheck.error,
+                retryAfter: rateLimitCheck.retryAfter,
+                type: rateLimitCheck.type,
+                criador: '@MutanoX'
+            }));
+            return;
+        }
 
         let apiKey = query.apikey;
         const miniServiceKey = query.mskey; // Mini service API key
