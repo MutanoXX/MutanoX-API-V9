@@ -563,6 +563,11 @@ const server = http.createServer(async (req, res) => {
         fs.createReadStream(pathModule.join(__dirname, 'dashboards', 'dashboard-new.js')).pipe(res);
         return;
     }
+    if (path === '/dashboards/dashboard-enhanced.js' || path === '/admin/dashboard-enhanced.js') {
+        res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+        fs.createReadStream(pathModule.join(__dirname, 'dashboards', 'dashboard-enhanced.js')).pipe(res);
+        return;
+    }
     if (path === '/api/dashboard_users' || path === '/user-dashboard') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         fs.createReadStream(pathModule.join(__dirname, 'mini-services', 'dashboard_users.html')).pipe(res);
