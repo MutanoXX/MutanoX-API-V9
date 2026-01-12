@@ -1357,7 +1357,7 @@ const server = http.createServer(async (req, res) => {
         console.log(`[API] URL completa: ${req.url}`);
         console.log(`[API] Query params:`, query);
 
-        const apiKey = query.apikey;
+        let apiKey = query.apikey;
         const miniServiceKey = query.mskey; // Mini service API key
         const tipo = query.tipo;
 
