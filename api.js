@@ -1479,7 +1479,6 @@ async function handleApiRequest(req, res, tipo, query, apiKey) {
     }
 
     // Log detalhado de cada requisição
-    console.log(`[API REQUEST] ${new Date().toISOString()} - Tipo: ${tipo}, Query: ${query.q || query.cpf || query.id}, MSKey: ${miniServiceKey ? miniServiceKey.substring(0,8) + '...' : 'N/A'}, APIKey: ${apiKey ? apiKey.substring(0,8) + '...' : 'N/A'}`);
 
     let result;
     try {
